@@ -93,32 +93,44 @@ async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Обработчик всех текстовых сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает все текстовые сообщения"""
+    """Обрабатывает все текстовые сообщения и нажатия кнопок"""
     try:
         # Проверяем, что это текстовое сообщение
         if not update.message or not update.message.text:
             return
 
         # Получаем текст сообщения
-        user_message = update.message.text.lower()
+        text = update.message.text
         
-        # Проверяем наличие слова "Молли"
-        if "молли" not in user_message:
-            return
-
-        # Получаем текст без слова "молли"
-        message_text = user_message.replace("молли", "").strip()
+        # Обработка кнопок меню
+        if text == '⚙️ Настройки':
+            await handle_settings(update, context)
+        elif text == '🔍 Поиск':
+            await handle_search(update, context)
+        elif text == '📊 Статистика':
+            await handle_stats(update, context)
+        elif text == '🔄 Сменить личность':
+            await handle_change_personality(update, context)
+        elif text == '⚙️ Настройки персонализации':
+            await handle_personalization(update, context)
+        elif text == '🔙 Назад':
+            await handle_back(update, context)
         
-        # Формируем промпт для модели
-        prompt = f"Ты Молли, твой пользователь написал: {message_text}\nОтветь как живой человек:"
-        
-        # Генерируем ответ
-        response = await generate_response(prompt)
-        
-        if response:
-            await update.message.reply_text(response)
-        else:
-            await update.message.reply_text("❌ Извините, не удалось сгенерировать ответ")
+        # Обработка сообщений к Молли
+        elif "молли" in text.lower():
+            # Получаем текст без слова "молли"
+            message_text = text.lower().replace("молли", "").strip()
+            
+            # Формируем промпт для модели
+            prompt = f"Ты Молли, твой пользователь написал: {message_text}\nОтветь как живой человек:"
+            
+            # Генерируем ответ
+            response = await generate_response(prompt)
+            
+            if response:
+                await update.message.reply_text(response)
+            else:
+                await update.message.reply_text("❌ Извините, не удалось сгенерировать ответ")
 
     except Exception as e:
         logger.error(f"Ошибка в handle_message: {str(e)}")
