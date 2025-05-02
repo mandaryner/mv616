@@ -16,8 +16,7 @@ logger = logging.getLogger(__name__)
 # Токен бота
 BOT_TOKEN = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
 
-# API ключ OpenAI
-OPENAI_API_KEY = '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'
+# API ключ OpenAI будет загружен из переменной окружения
 
 # Личность бота
 PERSONALITY = {
@@ -36,7 +35,7 @@ conversation_history = []
 def init_openai():
     try:
         # Настройка OpenAI
-        openai.api_key = OPENAI_API_KEY
+        openai.api_key = os.getenv('OPENAI_API_KEY')
         if not openai.api_key:
             logger.error("API ключ OpenAI не найден!")
             return False
