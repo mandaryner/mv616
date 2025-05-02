@@ -1,7 +1,7 @@
 # your_script.py
 import logging
-from telegram import Bot
-from telegram.ext import CommandHandler, Updater
+from telegram import Update
+from telegram.ext import CommandHandler, Application
 
 # Установим уровень логирования
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -9,9 +9,9 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Обработчик команды /start
-def start(update, context):
+async def start(update: Update, context):
     """Обработчик команды /start"""
-    update.message.reply_text('Привет! Я бот!')
+    await update.message.reply_text('Привет! Я бот!')
 
 # Основная функция для запуска бота
 def main():
@@ -19,18 +19,14 @@ def main():
     # Вставьте сюда ваш токен бота
     bot_token = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
 
-    # Создаем объект Updater и получаем диспетчера
-    updater = Updater(bot_token)
-
-    # Получаем диспетчера для добавления обработчиков
-    dispatcher = updater.dispatcher
+    # Создаем объект Application
+    application = Application.builder().token(bot_token).build()
 
     # Регистрируем обработчик команды /start
-    dispatcher.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("start", start))
 
     # Запускаем бота
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
