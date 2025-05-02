@@ -4,6 +4,9 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 import os
 import json
 import requests
+import sys
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 
 # Настройка логирования
 logging.basicConfig(
@@ -794,43 +797,17 @@ if __name__ == '__main__':
         
         # Настраиваем обработчики
         application.add_handler(CommandHandler('start', start))
-        application.add_handler(CommandHandler('settings', settings))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-        # Проверяем вебхук
-        try:
-            webhook_info = application.bot.get_webhook_info()
-            logger.info(f"Текущий вебхук: {webhook_info.url}")
+        
+        # Удаляем вебхук (если он существует)
+        webhook_info = application.bot.get_webhook_info()
+        if webhook_info.url:
             application.bot.delete_webhook()
-            logger.info("✅ Старый вебхук удален")
-        except Exception as e:
-            logger.error(f"⚠️ Ошибка при удалении старого вебхука: {str(e)}")
-
-        # Устанавливаем новый вебхук
-        WEBHOOK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/webhook"
-        PORT = int(os.getenv('PORT', '8080'))
+            logger.info("✅ Вебхук удален")
         
-        try:
-            application.bot.set_webhook(
-                url=WEBHOOK_URL,
-                secret_token=WEBHOOK_SECRET,
-                allowed_updates=['message']
-            )
-            logger.info(f"✅ Вебхук установлен: {WEBHOOK_URL}")
-        except Exception as e:
-            logger.error(f"❌ Ошибка при установке вебхука: {str(e)}")
-            exit(1)
-
-        # Запускаем веб-сервер
-        logger.info(f"🚀 Запуск веб-сервера на порту {PORT}...")
-        
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path="/webhook",
-            webhook_url=WEBHOOK_URL,
-            secret_token=WEBHOOK_SECRET
-        )
+        # Запускаем бота в режиме long polling
+        logger.info("🚀 Запуск бота в режиме long polling...")
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
 
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {str(e)}")
