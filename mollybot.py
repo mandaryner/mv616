@@ -35,8 +35,8 @@ def init_openai():
         # Настройка OpenAI
         openai.api_key = os.getenv('OPENAI_API_KEY')
         if not openai.api_key:
-            logger.warning("API ключ OpenAI не найден. Использую бесплатный режим.")
-            openai.api_key = "sk-..."  # Используем бесплатный API ключ
+            logger.error("API ключ OpenAI не найден!")
+            return False
         
         # Проверяем подключение
         try:
@@ -46,11 +46,10 @@ def init_openai():
                 max_tokens=1
             )
             logger.info("Успешное подключение к OpenAI")
+            return True
         except Exception as e:
             logger.error(f"Ошибка подключения к OpenAI: {str(e)}")
-            logger.info("Используем бесплатный режим")
-            
-        return True
+            return False
     except Exception as e:
         logger.error(f"Ошибка инициализации OpenAI: {str(e)}")
         return False
@@ -204,12 +203,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Основная функция
 def main():
     try:
-        # Создаем цикл событий
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
         # Инициализируем OpenAI
-        if not loop.run_until_complete(init_openai()):
+        if not init_openai():
             logger.error("Не удалось инициализировать OpenAI")
             return
         
