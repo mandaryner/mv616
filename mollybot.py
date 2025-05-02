@@ -13,7 +13,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Настройки OpenRouter
+# Настройки OpenRouter с бесплатной моделью
 OPENROUTER_API_KEY = "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"
 openai.api_key = OPENROUTER_API_KEY
 openai.api_base = "https://openrouter.ai/api/v1"
@@ -42,7 +42,7 @@ def init_openai():
         # Проверяем подключение к OpenRouter
         try:
             openai.ChatCompletion.create(
-                model="openai/gpt-3.5-turbo",
+                model="mistral/7b-instruct",
                 messages=[{"role": "user", "content": "Test connection"}],
                 max_tokens=1
             )
@@ -75,7 +75,7 @@ def get_openai_response(prompt):
         
         # Получаем ответ от OpenRouter
         response = openai.ChatCompletion.create(
-            model="openai/gpt-3.5-turbo",
+            model="mistral/7b-instruct",
             messages=messages,
             max_tokens=150,
             temperature=0.7
