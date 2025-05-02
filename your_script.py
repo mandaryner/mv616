@@ -475,10 +475,30 @@ async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.reply_to_message:
         return
 
-    user_message = update.message.reply_to_message.text
+    # Получаем текст сообщения
+    try:
+        user_message = update.message.reply_to_message.text
+        if not user_message:
+            await update.message.reply_text("⚠️ Пустое сообщение")
+            return
+    except Exception as e:
+        logger.error(f"Ошибка при получении текста сообщения: {str(e)}")
+        await update.message.reply_text("⚠️ Ошибка при обработке сообщения")
+        return
+
     trigger_words = ["Молли", "молли"]  # Список слов, на которые должен отвечать бот
 
+    # Проверяем, что сообщение не пустое
+    if not user_message.strip():
+        await update.message.reply_text("⚠️ Пустое сообщение")
+        return
+
     if not any(word in user_message.lower() for word in trigger_words):
+        return
+
+    # Проверяем API ключ
+    if not OPENROUTER_API_KEY:
+        await update.message.reply_text("❌ Ошибка: API ключ OpenRouter не настроен!")
         return
 
     thread_id = str(update.message.reply_to_message.message_id)
