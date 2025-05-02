@@ -714,24 +714,37 @@ async def setup_webhook():
     logger.info(f"✅ Вебхук настроен: {webhook_url}")
 
 if __name__ == '__main__':
+    # Удаляем все старые вебхуки
+    try:
+        app = ApplicationBuilder().token(BOT_TOKEN).build()
+        app.bot.delete_webhook()
+        logger.info("✅ Все старые вебхуки удалены")
+    except Exception as e:
+        logger.error(f"⚠️ Ошибка при удалении старых вебхуков: {str(e)}")
+
     # Создаем приложение
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     
-    # Регистрируем обработчики команд и сообщений
+    # Настраиваем обработчики
+    application.add_handler(CommandHandler('settings', settings))
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('help', help_command))
+    application.add_handler(CommandHandler('stats', get_statistics))
+    application.add_handler(CommandHandler('add_banned_word', add_banned_word))
+    application.add_handler(CommandHandler('remove_banned_word', remove_banned_word))
+    application.add_handler(MessageHandler(filters.REPLY, handle_reply))
+
+    # Устанавливаем новый вебхук
+    WEBHOOK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/webhook"
+    PORT = int(os.getenv('PORT', '8080'))
+    
     try:
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("help", help_command))
-        application.add_handler(CommandHandler("settings", settings))
-        application.add_handler(CommandHandler("stats", show_statistics))
-        application.add_handler(CommandHandler("add_banned_word", add_banned_word))
-        application.add_handler(CommandHandler("remove_banned_word", remove_banned_word))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_reply))
-        
-        # Настройка вебхука
-        webhook_url = f"https://{RENDER_SERVICE_NAME}.onrender.com/{WEBHOOK_SECRET}/"
-        application.bot.set_webhook(webhook_url)
-        logger.info(f"✅ Вебхук настроен: {webhook_url}")
-        
+        application.bot.set_webhook(
+            url=WEBHOOK_URL,
+            secret_token=WEBHOOK_SECRET,
+            allowed_updates=['message', 'callback_query']
+        )
+        logger.info(f"✅ Вебхук установлен: {WEBHOOK_URL}")
         # Запуск сервера для вебхука
         server = HTTPServer(('0.0.0.0', PORT), WebhookHandler)
         logger.info(f"🚀 Сервер запущен на порту {PORT}")
