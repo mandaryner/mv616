@@ -1,16 +1,8 @@
-import logging
-import json
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
-import requests
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 import os
-import re
-import sys
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import urllib.parse
-import hmac
-import hashlib
-from googleapiclient.discovery import build
+import logging
+import requests
 
 # Настройка логирования
 logging.basicConfig(
@@ -21,60 +13,85 @@ logger = logging.getLogger(__name__)
 
 # Загрузка переменных окружения
 BOT_TOKEN = "7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14"
-RENDER_SERVICE_NAME = "mv616"
 WEBHOOK_SECRET = "NZpMVnfpTym3jfpzJ8A6f8axlRSukKnFNLOabTmOIfU"
-GOOGLE_CLIENT_ID = "299175279064-nh9d7r0h57kj4r2cpsidrrd6in5trafn.apps.googleusercontent.com"
-GOOGLE_CSE_ID = "34da120c8e7b34c06"
 
 # Настройка вебхука
 WEBHOOK_PATH = f"/{WEBHOOK_SECRET}/"
 
-# Проверка обязательных переменных
-REQUIRED_VARS = ['BOT_TOKEN', 'RENDER_SERVICE_NAME', 'WEBHOOK_SECRET']
-missing_vars = [var for var in REQUIRED_VARS if not globals()[var]]
-if missing_vars:
-    raise ValueError(f"❌ Отсутствуют обязательные переменные: {', '.join(missing_vars)}")
+# Функция проверки прав администратора
+async def is_admin(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    """Проверяет, является ли бот администратором в чате"""
+    try:
+        chat_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+        return chat_member.status in ["administrator", "creator"]
+    except Exception as e:
+        logger.error(f"Ошибка при проверке прав администратора: {str(e)}")
+        return False
 
-# Настройка Google API
-GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')  # Если нужно использовать API ключ
-if GOOGLE_API_KEY:
-    logger.info("✅ Google API ключ загружен")
-else:
-    logger.warning("⚠️ Google API ключ не найден")
+# Функция генерации ответа
+async def generate_response(prompt):
+    """Генерирует ответ с помощью Ollama"""
+    try:
+        response = requests.post(
+            "http://ollama:11434/api/generate",
+            json={
+                "model": "mistral",
+                "prompt": prompt,
+                "stream": False,
+                "temperature": 0.7,
+                "top_p": 0.9
+            }
+        )
+        
+        if response.status_code == 200:
+            return response.json()["response"]
+        else:
+            logger.error(f"Ошибка API: {response.json()}")
+            return None
+    except Exception as e:
+        logger.error(f"Ошибка при генерации ответа: {str(e)}")
+        return None
 
-# Настройка порта
-PORT = int(os.getenv('PORT', '8080'))
-logger.info(f"✅ Порт установлен: {PORT}")
+# Обработчик сообщений
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает все сообщения"""
+    try:
+        # Проверяем, что это текстовое сообщение
+        if not update.message or not update.message.text:
+            return
 
-# Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+        # Получаем ID чата
+        chat_id = update.message.chat_id
+        
+        # Проверяем, является ли бот администратором в группе/канале
+        if update.message.chat.type != "private":
+            if not await is_admin(context, chat_id):
+                return
 
-# Загрузка переменных окружения
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME')
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'default_secret')
+        # Получаем текст сообщения
+        text = update.message.text.lower()
+        
+        # Проверяем наличие слова "молли"
+        if "молли" not in text:
+            return
+            
+        # Удаляем слово "молли" из сообщения
+        message_text = text.replace("молли", "").strip()
+        
+        # Формируем промпт для модели
+        prompt = f"Ты Молли, твой пользователь написал: {message_text}\nОтветь как живой человек:"
+        
+        # Генерируем ответ
+        response = await generate_response(prompt)
+        
+        if response:
+            await update.message.reply_text(response)
+        else:
+            await update.message.reply_text("❌ Извините, не удалось сгенерировать ответ")
 
-# Настройка вебхука
-WEBHOOK_PATH = f"/{WEBHOOK_SECRET}/"
-
-# Обработчик команды /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отправляет сообщение при команде /start"""
-    keyboard = [
-        ['⚙️ Настройки'],
-        ['🔍 Поиск'],
-        ['📊 Статистика']
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
-    await update.message.reply_text(
-        'Привет! Я бот Молли. Готова помочь вам с любыми вопросами.',
-        reply_markup=reply_markup
-    )
+    except Exception as e:
+        logger.error(f"Ошибка в handle_message: {str(e)}")
+        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
 
 # Обработчик команды /settings
 async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -929,74 +946,30 @@ def main():
 
 async def setup_webhook():
 if __name__ == '__main__':
-    # Проверяем обязательные переменные окружения
-    required_env_vars = ['BOT_TOKEN', 'RENDER_SERVICE_NAME', 'WEBHOOK_SECRET']
-    missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+    # Создаем приложение
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
     
-    if missing_vars:
-        logger.error(f"❌ Отсутствуют обязательные переменные окружения: {', '.join(missing_vars)}")
-        exit(1)
-
-    # Настройка логирования
-    logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.INFO
-    )
-    logger = logging.getLogger(__name__)
-
+    # Настраиваем обработчик сообщений
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_channel_message))
+    
+    # Проверяем вебхук
     try:
-        # Создаем приложение
-        application = ApplicationBuilder().token(BOT_TOKEN).build()
-        
-        # Настраиваем обработчики
-        application.add_handler(CommandHandler('start', start))
-        application.add_handler(CommandHandler('settings', settings))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-        # Проверяем вебхук
-        try:
-            webhook_info = application.bot.get_webhook_info()
-            logger.info(f"Текущий вебхук: {webhook_info.url}")
-            application.bot.delete_webhook()
-            logger.info("✅ Старый вебхук удален")
-        except Exception as e:
-            logger.error(f"⚠️ Ошибка при удалении старого вебхука: {str(e)}")
-
-        # Устанавливаем новый вебхук
-        WEBHOOK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/webhook"
-        PORT = int(os.getenv('PORT', '8080'))
-        
-        try:
-            application.bot.set_webhook(
-                url=WEBHOOK_URL,
-                secret_token=WEBHOOK_SECRET,
-                allowed_updates=['message']
-            )
-            logger.info(f"✅ Вебхук установлен: {WEBHOOK_URL}")
-        except Exception as e:
-            logger.error(f"❌ Ошибка при установке вебхука: {str(e)}")
-            exit(1)
-
-        # Запускаем веб-сервер
-        logger.info(f"🚀 Запуск веб-сервера на порту {PORT}...")
-        
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path="/webhook",
-            webhook_url=WEBHOOK_URL,
-            secret_token=WEBHOOK_SECRET
-        )
-
+        webhook_info = application.bot.get_webhook_info()
+        logger.info(f"Текущий вебхук: {webhook_info.url}")
     except Exception as e:
-        logger.error(f"❌ Критическая ошибка: {str(e)}")
-        raise
+        logger.error(f"Ошибка при проверке вебхука: {str(e)}")
+    
+    # Запускаем бота
+    logger.info("🚀 Запуск бота...")
+    application.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True
+    )
 
     # Удаляем старый вебхук
     try:
         application.bot.delete_webhook()
         logger.info("✅ Старый вебхук удален")
-    except Exception as e:
         logger.error(f"⚠️ Ошибка при удалении старого вебхука: {str(e)}")
 
     # Устанавливаем новый вебхук
