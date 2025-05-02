@@ -1,0 +1,8 @@
+python-telegram-bot==20.3
+requests
+import requests
+print("Библиотека requests успешно работает!")
+requests
+python-telegram-bot
+python-telegram-bot
+requests
