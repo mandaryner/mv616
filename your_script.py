@@ -1,10 +1,10 @@
-import logging
-import json
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
-import requests
-import os
-import re
+logging
+json
+telegram Update, ReplyKeyboardMarkup
+from telegram.ext ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
+requests
+os
+re
 
 
 BOT_TOKEN = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
@@ -30,7 +30,7 @@ else:
 # История сообщений (по ID поста)
 conversations = {}
 
-from keep_alive import keep_alive
+from keep_alive keep_alive
 
 keep_alive()
 
@@ -507,7 +507,7 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 
-    import requests
+    requests
 
     def google_search(search_term, api_key, cse_id, **kwargs):
         query_params = {
