@@ -8,6 +8,10 @@ import re
 import sys
 import json
 from googleapiclient.discovery import build
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import urllib.parse
+import hmac
+import hashlib
 
 # Функция для поиска в Google
 async def google_search(query, context):
@@ -68,25 +72,8 @@ logger.info(f"  - Google Client ID: {'Установлен' if GOOGLE_CLIENT_ID 
 logger.info(f"  - Вебхук секрет: {'Установлен' if WEBHOOK_SECRET else 'Не установлен'}")
 logger.info("  - Модель: " + MODEL)
 
-# Настройка логирования
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Логирование настроек
-logger.info(f"⚙️ Настройки бота:")
-logger.info(f"  - PORT: {PORT}")
-logger.info(f"  - RENDER_SERVICE_NAME: {RENDER_SERVICE_NAME}")
-logger.info(f"  - ADMIN_IDS: {ADMIN_IDS}")
-logger.info("  - OpenRouter API ключ: Установлен")
-logger.info("  - Бот токен: Установлен")
-logger.info(f"  - Google API ключ: {'Установлен' if GOOGLE_API_KEY else 'Не установлен'}")
-logger.info(f"  - Google CSE ID: {'Установлен' if GOOGLE_CSE_ID else 'Не установлен'}")
-logger.info(f"  - Google Client ID: {'Установлен' if GOOGLE_CLIENT_ID else 'Не установлен'}")
-logger.info(f"  - Вебхук секрет: {'Установлен' if WEBHOOK_SECRET else 'Не установлен'}")
-logger.info("  - Модель: " + MODEL)
-
-
-
+# Настройка вебхука
+WEBHOOK_PATH = f"/{WEBHOOK_SECRET}/"
 
 # Загрузка данных
 if os.path.exists('users.json'):
@@ -618,4 +605,27 @@ def main():
     print("🤖 Бот запущен в режиме вебхука...")
 
 if __name__ == '__main__':
-    main()
+    # Создаем приложение
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    # Регистрируем обработчики команд и сообщений
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("settings", settings))
+    application.add_handler(CommandHandler("stats", show_statistics))
+    application.add_handler(CommandHandler("add_banned_word", add_banned_word))
+    application.add_handler(CommandHandler("remove_banned_word", remove_banned_word))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_reply))
+    
+    # Настройка вебхука
+    webhook_url = f"https://{RENDER_SERVICE_NAME}.onrender.com/{WEBHOOK_SECRET}/"
+    application.bot.set_webhook(webhook_url)
+    logger.info(f"✅ Вебхук настроен: {webhook_url}")
+    
+    # Запуск бота
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    
+    # Запуск сервера для вебхука
+    server = HTTPServer(('0.0.0.0', PORT), WebhookHandler)
+    logger.info(f"🚀 Сервер запущен на порту {PORT}")
+    server.serve_forever()
