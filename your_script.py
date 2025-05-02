@@ -731,18 +731,13 @@ def main():
     print("🤖 Бот запущен в режиме вебхука...")
 
 async def setup_webhook():
-    webhook_url = f"https://{RENDER_SERVICE_NAME}.onrender.com/{WEBHOOK_SECRET}/"
-    await application.bot.set_webhook(webhook_url)
-    logger.info(f"✅ Вебхук настроен: {webhook_url}")
-
 if __name__ == '__main__':
-    # Удаляем все старые вебхуки
-    try:
-        app = ApplicationBuilder().token(BOT_TOKEN).build()
-        app.bot.delete_webhook()
-        logger.info("✅ Все старые вебхуки удалены")
-    except Exception as e:
-        logger.error(f"⚠️ Ошибка при удалении старых вебхуков: {str(e)}")
+    # Настройка логирования
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO
+    )
+    logger = logging.getLogger(__name__)
 
     # Создаем приложение
     application = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -756,6 +751,13 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('remove_banned_word', remove_banned_word))
     application.add_handler(MessageHandler(filters.REPLY, handle_reply))
 
+    # Удаляем старый вебхук
+    try:
+        application.bot.delete_webhook()
+        logger.info("✅ Старый вебхук удален")
+    except Exception as e:
+        logger.error(f"⚠️ Ошибка при удалении старого вебхука: {str(e)}")
+
     # Устанавливаем новый вебхук
     WEBHOOK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/webhook"
     PORT = int(os.getenv('PORT', '8080'))
@@ -767,15 +769,16 @@ if __name__ == '__main__':
             allowed_updates=['message', 'callback_query']
         )
         logger.info(f"✅ Вебхук установлен: {WEBHOOK_URL}")
-        # Запуск сервера для вебхука
-        server = HTTPServer(('0.0.0.0', PORT), WebhookHandler)
-        logger.info(f"🚀 Сервер запущен на порту {PORT}")
-        
-        # Запуск бота
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
-        
-        # Запуск сервера
-        server.serve_forever()
     except Exception as e:
-        logger.error(f"Ошибка при запуске бота: {str(e)}")
-        raise
+        logger.error(f"❌ Ошибка при установке вебхука: {str(e)}")
+        exit(1)
+
+    # Запускаем веб-сервер
+    logger.info(f"🚀 Запуск веб-сервера на порту {PORT}...")
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path="/webhook",
+        webhook_url=WEBHOOK_URL,
+        secret_token=WEBHOOK_SECRET
+    )
