@@ -16,10 +16,8 @@ logger = logging.getLogger(__name__)
 # Токен бота
 BOT_TOKEN = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
 
-# API ключ OpenAI будет загружен из переменной окружения
-# Конфигурация OpenAI
-OPENAI_ORGANIZATION = "org-uYHWsbboHfUEYfNBWdZYJm3S"
-OPENAI_PROJECT = os.getenv('PROJECT_ID')
+# API ключ OpenAI
+OPENAI_API_KEY = "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"
 
 # Личность бота
 PERSONALITY = {
@@ -38,15 +36,10 @@ conversation_history = []
 def init_openai():
     try:
         # Настройка OpenAI
-        openai.api_key = os.getenv('OPENAI_API_KEY')
+        openai.api_key = OPENAI_API_KEY
         if not openai.api_key:
             logger.error("API ключ OpenAI не найден!")
             return False
-        
-        # Устанавливаем организацию и проект
-        openai.organization = OPENAI_ORGANIZATION
-        if OPENAI_PROJECT:
-            openai.project = OPENAI_PROJECT
         
         # Проверяем подключение
         try:
