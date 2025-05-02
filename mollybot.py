@@ -4,6 +4,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 import openai
 import json
+import asyncio
 
 # Настройка логирования
 logging.basicConfig(
@@ -29,7 +30,7 @@ PERSONALITY = {
 conversation_history = []
 
 # Функция для инициализации OpenAI
-async def init_openai():
+def init_openai():
     try:
         # Настройка OpenAI
         openai.api_key = os.getenv('OPENAI_API_KEY')
@@ -39,7 +40,7 @@ async def init_openai():
         
         # Проверяем подключение
         try:
-            await openai.ChatCompletion.acreate(
+            openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": "Test connection"}],
                 max_tokens=1
@@ -55,7 +56,7 @@ async def init_openai():
         return False
 
 # Функция для получения ответа от OpenAI
-async def get_openai_response(prompt):
+def get_openai_response(prompt):
     try:
         # Формируем сообщение для OpenAI
         messages = [
@@ -73,7 +74,7 @@ async def get_openai_response(prompt):
         messages.extend(conversation_history[-5:])  # Используем последние 5 сообщений
         
         # Получаем ответ от OpenAI
-        response = await openai.ChatCompletion.acreate(
+        response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=messages,
             max_tokens=150,
@@ -99,12 +100,12 @@ async def edit_personality(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Стиль общения: {PERSONALITY['communication_style']}\n"
             "\n"
             "Чтобы изменить параметр, используйте:\n"
-            "/edit name новое_имя\n"
-            "/edit age новый_возраст\n"
-            "/edit occupation новое_занятие\n"
-            "/edit hobbies новое_хобби1,новое_хобби2\n"
-            "/edit traits новая_черта1,новая_черта2\n"
-            "/edit style новый_стиль"
+            "/editname новое_имя\n"
+            "/editage новый_возраст\n"
+            "/editoccupation новое_занятие\n"
+            "/edithobbies новое_хобби1,новое_хобби2\n"
+            "/edittraits новая_черта1,новая_черта2\n"
+            "/editstyle новый_стиль"
         )
         return
     
@@ -203,8 +204,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Основная функция
 def main():
     try:
+        # Создаем цикл событий
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
         # Инициализируем OpenAI
-        if not asyncio.run(init_openai()):
+        if not loop.run_until_complete(init_openai()):
             logger.error("Не удалось инициализировать OpenAI")
             return
         
