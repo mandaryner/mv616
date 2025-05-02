@@ -30,6 +30,29 @@ async def google_search(query, context):
         logger.error(f"Ошибка при поиске в Google: {str(e)}")
         return []
 
+# Обработчик команды /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    await update.message.reply_text(
+        f"Привет, {user.first_name}! Я твой AI ассистент.\n"
+        "Доступные команды:\n"
+        "/help - Показать помощь\n"
+        "/settings - Настроить параметры бота\n"
+        "/stats - Показать статистику\n"
+    )
+
+# Обработчик команды /help
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "Доступные команды:\n"
+        "/start - Начать диалог\n"
+        "/help - Показать эту справку\n"
+        "/settings - Настроить параметры бота\n"
+        "/stats - Показать статистику\n"
+        "/add_banned_word - Добавить запрещенное слово\n"
+        "/remove_banned_word - Удалить запрещенное слово\n"
+    )
+
 # Добавляем путь к текущей директории
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -609,23 +632,29 @@ if __name__ == '__main__':
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     
     # Регистрируем обработчики команд и сообщений
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("settings", settings))
-    application.add_handler(CommandHandler("stats", show_statistics))
-    application.add_handler(CommandHandler("add_banned_word", add_banned_word))
-    application.add_handler(CommandHandler("remove_banned_word", remove_banned_word))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_reply))
-    
-    # Настройка вебхука
-    webhook_url = f"https://{RENDER_SERVICE_NAME}.onrender.com/{WEBHOOK_SECRET}/"
-    application.bot.set_webhook(webhook_url)
-    logger.info(f"✅ Вебхук настроен: {webhook_url}")
-    
-    # Запуск бота
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
-    
-    # Запуск сервера для вебхука
-    server = HTTPServer(('0.0.0.0', PORT), WebhookHandler)
-    logger.info(f"🚀 Сервер запущен на порту {PORT}")
-    server.serve_forever()
+    try:
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_command))
+        application.add_handler(CommandHandler("settings", settings))
+        application.add_handler(CommandHandler("stats", show_statistics))
+        application.add_handler(CommandHandler("add_banned_word", add_banned_word))
+        application.add_handler(CommandHandler("remove_banned_word", remove_banned_word))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_reply))
+        
+        # Настройка вебхука
+        webhook_url = f"https://{RENDER_SERVICE_NAME}.onrender.com/{WEBHOOK_SECRET}/"
+        await application.bot.set_webhook(webhook_url)
+        logger.info(f"✅ Вебхук настроен: {webhook_url}")
+        
+        # Запуск сервера для вебхука
+        server = HTTPServer(('0.0.0.0', PORT), WebhookHandler)
+        logger.info(f"🚀 Сервер запущен на порту {PORT}")
+        
+        # Запуск бота
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+        
+        # Запуск сервера
+        server.serve_forever()
+    except Exception as e:
+        logger.error(f"Ошибка при запуске бота: {str(e)}")
+        raise
