@@ -1,7 +1,8 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
-import os
 import logging
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+import os
+import json
 import requests
 
 # Настройка логирования
@@ -12,62 +13,60 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Загрузка переменных окружения
-BOT_TOKEN = "7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14"
-WEBHOOK_SECRET = "NZpMVnfpTym3jfpzJ8A6f8axlRSukKnFNLOabTmOIfU"
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME')
+WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
 
-# Настройка вебхука
-WEBHOOK_PATH = f"/{WEBHOOK_SECRET}/"
+# Проверка обязательных переменных
+if not all([BOT_TOKEN, RENDER_SERVICE_NAME, WEBHOOK_SECRET]):
+    raise ValueError("❌ Отсутствуют обязательные переменные окружения")
 
-# Функция проверки прав администратора
-async def is_admin(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
-    """Проверяет, является ли бот администратором в чате"""
+# Функция поиска информации
+async def search_info(query):
     try:
-        chat_member = await context.bot.get_chat_member(chat_id, context.bot.id)
-        return chat_member.status in ["administrator", "creator"]
-    except Exception as e:
-        logger.error(f"Ошибка при проверке прав администратора: {str(e)}")
-        return False
-
-# Функция генерации ответа
-async def generate_response(prompt):
-    """Генерирует ответ с помощью Ollama"""
-    try:
-        response = requests.post(
-            "http://ollama:11434/api/generate",
-            json={
-                "model": "mistral",
-                "prompt": prompt,
-                "stream": False,
-                "temperature": 0.7,
-                "top_p": 0.9
-            }
-        )
+        # Используем DuckDuckGo API для поиска
+        url = f"https://api.duckduckgo.com/?q={query}&format=json"
+        response = requests.get(url)
+        data = response.json()
         
-        if response.status_code == 200:
-            return response.json()["response"]
-        else:
-            logger.error(f"Ошибка API: {response.json()}")
-            return None
+        if data.get('AbstractText'):
+            return data['AbstractText']
+        elif data.get('RelatedTopics'):
+            return data['RelatedTopics'][0]['Text']
+        return None
     except Exception as e:
-        logger.error(f"Ошибка при генерации ответа: {str(e)}")
+        logger.error(f"Ошибка при поиске информации: {str(e)}")
         return None
 
-# Обработчик сообщений
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает все сообщения"""
+# Функция загрузки личности
+async def load_personality():
     try:
-        # Проверяем, что это текстовое сообщение
-        if not update.message or not update.message.text:
-            return
+        with open('personality.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Ошибка при загрузке личности: {str(e)}")
+        return {
+            "name": "Молли",
+            "age": "22",
+            "interests": ["музыка", "путешествия", "фотография", "программирование"],
+            "personality": {
+                "style": "дружелюбный и живой",
+                "tone": "естественный и теплый",
+                "language": "русскоязычный",
+                "behavior": "человеческое общение"
+            }
+        }
 
-        # Получаем ID чата
-        chat_id = update.message.chat_id
-        
-        # Проверяем, является ли бот администратором в группе/канале
-        if update.message.chat.type != "private":
-            if not await is_admin(context, chat_id):
-                return
+# Обработчик команды /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        'Привет! Я Молли, твой личный ассистент.\n\n' +
+        'Я помогу тебе с любыми вопросами. Просто напиши "Молли" и твой вопрос.'
+    )
 
+# Обработчик сообщений
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
         # Получаем текст сообщения
         text = update.message.text.lower()
         
@@ -77,128 +76,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         # Удаляем слово "молли" из сообщения
         message_text = text.replace("молли", "").strip()
+
+        # Загружаем личность
+        personality = await load_personality()
         
-        # Формируем промпт для модели
-        prompt = f"Ты Молли, твой пользователь написал: {message_text}\nОтветь как живой человек:"
+        # Формируем ответ
+        response = f"Привет! Я {personality['name']}, мне {personality['age']} лет. "
+        response += f"Я интересуюсь {', '.join(personality['interests'])}. "
         
-        # Генерируем ответ
-        response = await generate_response(prompt)
-        
-        if response:
-            await update.message.reply_text(response)
+        # Если в сообщении есть вопрос, ищем информацию
+        if '?' in message_text:
+            search_result = await search_info(message_text)
+            if search_result:
+                response += f"\nПо твоему вопросу я нашла: {search_result}"
         else:
-            await update.message.reply_text("❌ Извините, не удалось сгенерировать ответ")
+            # Генерируем живой ответ
+            response += "\nКак я могу помочь тебе сегодня?"
+
+        await update.message.reply_text(response)
 
     except Exception as e:
         logger.error(f"Ошибка в handle_message: {str(e)}")
         await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
 
-# Обработчик команды /settings
-async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отправляет меню настроек"""
-    keyboard = [
-        ['🔄 Сменить личность'],
-        ['⚙️ Настройки персонализации'],
-        ['🔙 Назад']
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
-    await update.message.reply_text(
-        '⚙️ Меню настроек',
-        reply_markup=reply_markup
-    )
-
-# Обработчик всех текстовых сообщений
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обрабатывает все текстовые сообщения и нажатия кнопок"""
+if __name__ == '__main__':
     try:
-        # Проверяем, что это текстовое сообщение
-        if not update.message or not update.message.text:
-            return
-
-        # Получаем текст сообщения
-        text = update.message.text
+        # Создаем приложение
+        application = ApplicationBuilder().token(BOT_TOKEN).build()
         
-        # Обработка кнопок меню
-        if text == '⚙️ Настройки':
-            await handle_settings(update, context)
-        elif text == '🔍 Поиск':
-            await handle_search(update, context)
-        elif text == '📊 Статистика':
-            await handle_stats(update, context)
-        elif text == '🔄 Сменить личность':
-            await handle_change_personality(update, context)
-        elif text == '⚙️ Настройки персонализации':
-            await handle_personalization(update, context)
-        elif text == '🔙 Назад':
-            await handle_back(update, context)
-        
-        # Обработка сообщений к Молли
-        elif "молли" in text.lower():
-            # Получаем текст без слова "молли"
-            message_text = text.lower().replace("молли", "").strip()
-            
-            # Формируем промпт для модели
-            prompt = f"Ты Молли, твой пользователь написал: {message_text}\nОтветь как живой человек:"
-            
-            # Генерируем ответ
-            response = await generate_response(prompt)
-            
-            if response:
-                await update.message.reply_text(response)
-            else:
-                await update.message.reply_text("❌ Извините, не удалось сгенерировать ответ")
-
-    except Exception as e:
-        logger.error(f"Ошибка в handle_message: {str(e)}")
-        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
-
-# Функция для поиска в Google
-async def google_search(query, context):
-    try:
-        if not GOOGLE_API_KEY:
-            logger.warning("⚠️ Google API ключ не настроен")
-            return []
-
-        service = build('customsearch', 'v1', developerKey=GOOGLE_API_KEY)
-        result = service.cse().list(
-            q=query,
-            cx=GOOGLE_CSE_ID,
-            num=5
-        ).execute()
-        
-        if 'items' in result:
-            return result['items']
-        return []
-    except Exception as e:
-        logger.error(f"❌ Ошибка при поиске в Google: {str(e)}")
-        return []
-        return []
-
-# Обработчик команды /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
-    await update.message.reply_text(
-        f"Привет, {user.first_name}! Я твой AI ассистент.\n"
-        "Доступные команды:\n"
-        "/help - Показать помощь\n"
-        "/settings - Настроить параметры бота\n"
-        "/stats - Показать статистику\n"
-    )
-
-# Обработчик команды /help
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        "Доступные команды:\n"
-        "/start - Начать диалог\n"
-        "/help - Показать эту справку\n"
-        "/settings - Настроить параметры бота\n"
-        "/stats - Показать статистику\n"
-        "/add_banned_word - Добавить запрещенное слово\n"
-        "/remove_banned_word - Удалить запрещенное слово\n"
-    )
-
-# Добавляем путь к текущей директории
+        # Настраиваем обработчики
+        application.add_handler(CommandHandler('start', start))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Загрузка переменных окружения
@@ -592,91 +500,10 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
         del context.user_data['setting']
-        save_personalities()  # Сохраняем изменения
-        await update.message.reply_text("✅ Настройка успешно обновлена!")
-        await settings(update, context) # Redisplay menu after setting changes.
-        return
-
-    elif context.user_data.get('state') == 'selecting_personality_to_delete':
-        if update.message.text == "Отмена":
-            del context.user_data['state']
-            await show_settings_menu(update, context)
-            return
-
-        pid = update.message.text
-        if pid in personalities and pid != "default":  # Не удаляем дефолтную личность
-            del personalities[pid]
-            save_personalities()
-            await update.message.reply_text(f"✅ Личность с ID {pid} успешно удалена!")
-            await show_settings_menu(update, context)
-        else:
-            await update.message.reply_text("❌ Личность не найдена или это дефолтная личность!")
-
-# Функция регистрации
-
-
-# Функция обработки ответов
-async def generate_response(prompt):
-    """Генерирует ответ с помощью Ollama"""
     try:
-        # Отправляем запрос к Ollama
-        response = requests.post(
-            "http://ollama:11434/api/generate",
-            json={
-                "model": "mistral",
-                "prompt": prompt,
-                "stream": False,
-                "temperature": 0.7,
-                "top_p": 0.9
-            }
-        )
-        
-        if response.status_code == 200:
-            return response.json()["response"]
-        else:
-            logger.error(f"Ошибка API: {response.json()}")
-            return None
-    except Exception as e:
-        logger.error(f"Ошибка при генерации ответа: {str(e)}")
-        return None
-
-async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        # Проверяем, что это текстовое сообщение
-        if not update.message or not update.message.text:
-            return
-
-        # Получаем текст сообщения
-        user_message = update.message.text.lower()
-        
-        # Проверяем наличие слова "Молли"
-        if "молли" not in user_message:
-            return
-
-        # Получаем текст без слова "молли"
-        message_text = user_message.replace("молли", "").strip()
-        
-        # Формируем промпт для модели
-        prompt = f"Ты Молли, твой пользователь написал: {message_text}\nОтветь как живой человек:"
-        
-        # Генерируем ответ
-        response = await generate_response(prompt)
-        
-        if response:
-            await update.message.reply_text(response)
-        else:
-            await update.message.reply_text("❌ Извините, не удалось сгенерировать ответ")
-
-    except Exception as e:
-        logger.error(f"Ошибка в handle_reply: {str(e)}")
-        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
-        if not update.message or not update.message.text:
-            return
-
-        # Получаем текст сообщения
-        user_message = update.message.text.lower()
-        
-        # Проверяем наличие слова "Молли"
+        # Используем DuckDuckGo API для поиска
+        url = f"https://api.duckduckgo.com/?q={query}&format=json"
+        response = requests.get(url)
         if "молли" not in user_message:
             return
 
@@ -946,30 +773,74 @@ def main():
 
 async def setup_webhook():
 if __name__ == '__main__':
-    # Создаем приложение
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    # Проверяем обязательные переменные окружения
+    required_env_vars = ['BOT_TOKEN', 'RENDER_SERVICE_NAME', 'WEBHOOK_SECRET']
+    missing_vars = [var for var in required_env_vars if not os.getenv(var)]
     
-    # Настраиваем обработчик сообщений
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_channel_message))
-    
-    # Проверяем вебхук
-    try:
-        webhook_info = application.bot.get_webhook_info()
-        logger.info(f"Текущий вебхук: {webhook_info.url}")
-    except Exception as e:
-        logger.error(f"Ошибка при проверке вебхука: {str(e)}")
-    
-    # Запускаем бота
-    logger.info("🚀 Запуск бота...")
-    application.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True
+    if missing_vars:
+        logger.error(f"❌ Отсутствуют обязательные переменные окружения: {', '.join(missing_vars)}")
+        exit(1)
+
+    # Настройка логирования
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO
     )
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Создаем приложение
+        application = ApplicationBuilder().token(BOT_TOKEN).build()
+        
+        # Настраиваем обработчики
+        application.add_handler(CommandHandler('start', start))
+        application.add_handler(CommandHandler('settings', settings))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+        # Проверяем вебхук
+        try:
+            webhook_info = application.bot.get_webhook_info()
+            logger.info(f"Текущий вебхук: {webhook_info.url}")
+            application.bot.delete_webhook()
+            logger.info("✅ Старый вебхук удален")
+        except Exception as e:
+            logger.error(f"⚠️ Ошибка при удалении старого вебхука: {str(e)}")
+
+        # Устанавливаем новый вебхук
+        WEBHOOK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/webhook"
+        PORT = int(os.getenv('PORT', '8080'))
+        
+        try:
+            application.bot.set_webhook(
+                url=WEBHOOK_URL,
+                secret_token=WEBHOOK_SECRET,
+                allowed_updates=['message']
+            )
+            logger.info(f"✅ Вебхук установлен: {WEBHOOK_URL}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка при установке вебхука: {str(e)}")
+            exit(1)
+
+        # Запускаем веб-сервер
+        logger.info(f"🚀 Запуск веб-сервера на порту {PORT}...")
+        
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path="/webhook",
+            webhook_url=WEBHOOK_URL,
+            secret_token=WEBHOOK_SECRET
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Критическая ошибка: {str(e)}")
+        raise
 
     # Удаляем старый вебхук
     try:
         application.bot.delete_webhook()
         logger.info("✅ Старый вебхук удален")
+    except Exception as e:
         logger.error(f"⚠️ Ошибка при удалении старого вебхука: {str(e)}")
 
     # Устанавливаем новый вебхук
