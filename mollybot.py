@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
 
 # API ключ OpenAI будет загружен из переменной окружения
+# Конфигурация OpenAI
+OPENAI_ORGANIZATION = "org-uYHWsbboHfUEYfNBWdZYJm3S"
+OPENAI_PROJECT = os.getenv('PROJECT_ID')
 
 # Личность бота
 PERSONALITY = {
@@ -39,6 +42,11 @@ def init_openai():
         if not openai.api_key:
             logger.error("API ключ OpenAI не найден!")
             return False
+        
+        # Устанавливаем организацию и проект
+        openai.organization = OPENAI_ORGANIZATION
+        if OPENAI_PROJECT:
+            openai.project = OPENAI_PROJECT
         
         # Проверяем подключение
         try:
@@ -79,7 +87,8 @@ def get_openai_response(prompt):
             model="gpt-3.5-turbo",
             messages=messages,
             max_tokens=150,
-            temperature=0.7
+            temperature=0.7,
+            organization=OPENAI_ORGANIZATION
         )
         
         return response.choices[0].message.content
