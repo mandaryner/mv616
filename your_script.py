@@ -6,6 +6,25 @@ import requests
 import os
 import re
 import sys
+import json
+from googleapiclient.discovery import build
+
+# Функция для поиска в Google
+async def google_search(query, context):
+    try:
+        service = build('customsearch', 'v1', developerKey=os.getenv('GOOGLE_API_KEY'))
+        result = service.cse().list(
+            q=query,
+            cx=os.getenv('GOOGLE_CSE_ID'),
+            num=5
+        ).execute()
+        
+        if 'items' in result:
+            return result['items']
+        return []
+    except Exception as e:
+        logger.error(f"Ошибка при поиске в Google: {str(e)}")
+        return []
 
 # Добавляем путь к текущей директории
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -19,13 +38,29 @@ if missing_vars:
                      f"Пожалуйста, убедитесь, что эти переменные настроены в панели управления Render.")
 
 # Load environment variables
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+BOT_TOKEN = os.getenv('BOT_TOKEN', '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14')
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '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')
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+GOOGLE_CSE_ID = os.getenv('GOOGLE_CSE_ID', '34da120c8e7b34c06')
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '299175279064-nh9d7r0h57kj4r2cpsidrrd6in5trafn.apps.googleusercontent.com')
 MODEL = 'mistralai/mixtral-8x7b-instruct'
 ADMIN_IDS = set(os.getenv('ADMIN_IDS', '547527683').split(','))
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'your-secret-token')
-RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME')
+WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', '6164320')
+RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME', 'mv616')
 PORT = int(os.getenv('PORT', '8080'))
+
+# Добавляем Google API ключи в список обязательных переменных
+required_env_vars.extend(['GOOGLE_API_KEY', 'GOOGLE_CSE_ID', 'GOOGLE_CLIENT_ID'])
+
+# Логирование настроек
+logger.info(f"⚙️ Настройки бота:")
+logger.info(f"  - PORT: {PORT}")
+logger.info(f"  - RENDER_SERVICE_NAME: {RENDER_SERVICE_NAME}")
+logger.info(f"  - ADMIN_IDS: {ADMIN_IDS}")
+logger.info("  - OpenRouter API ключ: Установлен")
+logger.info("  - Бот токен: Установлен")
+logger.info(f"  - Google API ключ: {'Установлен' if GOOGLE_API_KEY else 'Не установлен'}")
+logger.info(f"  - Google CSE ID: {'Установлен' if GOOGLE_CSE_ID else 'Не установлен'}")
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
