@@ -1,1 +1,1 @@
-web: OPENAI_API_KEY=sk-abcd1234efgh5678abcd1234efgh5678abcd1234 python mollybot.py
+web: OPENAI_API_KEY=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 python mollybot.py
