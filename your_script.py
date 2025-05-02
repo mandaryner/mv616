@@ -475,40 +475,62 @@ async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.reply_to_message:
         return
 
-    # Получаем текст сообщения
     try:
+        # Получаем текст сообщения
         user_message = update.message.reply_to_message.text
-        logger.info(f"Получено сообщение: {user_message}")
         if not user_message:
-            logger.warning("Получено пустое сообщение")
-            await update.message.reply_text("⚠️ Пустое сообщение")
             return
-    except Exception as e:
-        logger.error(f"Ошибка при получении текста сообщения: {str(e)}")
-        await update.message.reply_text("⚠️ Ошибка при обработке сообщения")
-        return
 
-    # Проверяем тип сообщения
-    if update.message.reply_to_message:
-        logger.info(f"Тип сообщения: {update.message.reply_to_message.content_type}")
+        # Проверяем тип сообщения
         if update.message.reply_to_message.content_type != 'text':
-            await update.message.reply_text("⚠️ Бот отвечает только на текстовые сообщения")
             return
 
-    # Проверяем триггерные слова сразу после получения текста
-    trigger_words = ["Молли", "молли"]  # Список слов, на которые должен отвечать бот
-    if not any(word in user_message.lower() for word in trigger_words):
-        return
+        # Проверяем наличие слова "Молли" в сообщении
+        if "Молли" not in user_message and "молли" not in user_message:
+            return
 
-    # Проверяем API ключ
-    if not OPENROUTER_API_KEY:
-        await update.message.reply_text("❌ Ошибка: API ключ OpenRouter не настроен!")
-        return
+        # Проверяем API ключ
+        if not OPENROUTER_API_KEY:
+            await update.message.reply_text("❌ Ошибка: API ключ OpenRouter не настроен!")
+            return
 
-    # Проверяем, что сообщение не пустое
-    if not user_message.strip():
-        await update.message.reply_text("⚠️ Пустое сообщение")
-        return
+        # Получаем ID чата
+        chat_id = update.message.chat_id
+        
+        # Обрабатываем сообщение
+        try:
+            # Получаем текст сообщения, на которое отвечаем
+            original_post = update.message.reply_to_message.text
+            
+            # Формируем запрос к API
+            response = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": MODEL,
+                    "messages": [
+                        {"role": "user", "content": original_post}
+                    ]
+                }
+            )
+            
+            if response.status_code == 200:
+                reply = response.json()['choices'][0]['message']['content']
+                await update.message.reply_text(reply)
+            else:
+                await update.message.reply_text("❌ Ошибка при обработке запроса")
+                logger.error(f"Ошибка API: {response.json()}")
+
+        except Exception as e:
+            logger.error(f"Ошибка при обработке сообщения: {str(e)}")
+            await update.message.reply_text("❌ Ошибка при обработке сообщения")
+
+    except Exception as e:
+        logger.error(f"Ошибка в handle_reply: {str(e)}")
+        await update.message.reply_text("⚠️ Ошибка при обработке сообщения")
 
     thread_id = str(update.message.reply_to_message.message_id)
     original_post = update.message.reply_to_message.text
