@@ -113,7 +113,7 @@ GOOGLE_CSE_ID = os.getenv('GOOGLE_CSE_ID', '34da120c8e7b34c06')
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '299175279064-nh9d7r0h57kj4r2cpsidrrd6in5trafn.apps.googleusercontent.com')
 MODEL = 'mistralai/mixtral-8x7b-instruct'
 ADMIN_IDS = set(os.getenv('ADMIN_IDS', '547527683').split(','))
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', '6164320')
+WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'NZpMVnfpTym3jfpzJ8A6f8axlRSukKnFNLOabTmOIfU')
 RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME', 'mv616')
 PORT = int(os.getenv('PORT', '8080'))
 
