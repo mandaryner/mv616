@@ -115,6 +115,9 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Функция генерации ответа через Hugging Face
 async def generate_response(prompt):
     try:
+        # Логируем запрос
+        logger.info(f"Отправляю запрос к Hugging Face с текстом: {prompt[:100]}...")
+        
         # Формируем запрос к Hugging Face
         headers = {
             'Authorization': f'Bearer {HF_API_KEY}',
@@ -131,17 +134,28 @@ async def generate_response(prompt):
             }
         }
         
-        response = requests.post(
-            'https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf',
-            headers=headers,
-            json=data
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            return result[0]['generated_text']
-        else:
-            logger.error(f"Ошибка API Hugging Face: {response.text}")
+        # Попытка отправки запроса с таймаутом
+        try:
+            response = requests.post(
+                'https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf',
+                headers=headers,
+                json=data,
+                timeout=30  # Устанавливаем таймаут в 30 секунд
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"Получен успешный ответ от Hugging Face")
+                return result[0]['generated_text']
+            else:
+                logger.error(f"Ошибка API Hugging Face: {response.text}")
+                logger.error(f"Код ошибки: {response.status_code}")
+                return None
+        except requests.exceptions.Timeout:
+            logger.error("Время ожидания ответа истекло")
+            return None
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Ошибка при отправке запроса: {str(e)}")
             return None
     except Exception as e:
         logger.error(f"Ошибка при генерации ответа: {str(e)}")
@@ -172,9 +186,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if response:
             # Удаляем промпт из ответа
             response = response.replace(prompt, '').strip()
+            # Ограничиваем длину ответа до 1000 символов
+            if len(response) > 1000:
+                response = response[:1000] + "..."
             await update.message.reply_text(response)
         else:
-            await update.message.reply_text("Извините, не удалось сгенерировать ответ. Попробуйте позже.")
+            # Более информативное сообщение об ошибке
+            await update.message.reply_text("Извините, не удалось получить ответ от нейросети. Попробуйте позже или отправьте другое сообщение.")
+    except Exception as e:
+        logger.error(f"Ошибка при обработке сообщения: {str(e)}")
+        await update.message.reply_text("Извините, произошла ошибка при обработке вашего сообщения. Попробуйте позже.")
     except Exception as e:
         logger.error(f"Ошибка при обработке сообщения: {str(e)}")
         await update.message.reply_text("Извините, произошла ошибка при обработке вашего сообщения. Попробуйте позже.")
