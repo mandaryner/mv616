@@ -23,6 +23,60 @@ PERSONALITY = {
     'communication_style': 'дружеский и поддерживаемый'
 }
 
+# Функция для редактирования личности
+async def edit_personality(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        # Если нет аргументов, показываем текущую личность
+        await update.message.reply_text(
+            "Текущая личность:\n"
+            f"Имя: {PERSONALITY['name']}\n"
+            f"Возраст: {PERSONALITY['age']}\n"
+            f"Занятие: {PERSONALITY['occupation']}\n"
+            f"Хобби: {', '.join(PERSONALITY['hobbies'])}\n"
+            f"Черты характера: {', '.join(PERSONALITY['personality_traits'])}\n"
+            f"Стиль общения: {PERSONALITY['communication_style']}\n"
+            "\n"
+            "Чтобы изменить параметр, используйте:\n"
+            "/edit name новое_имя\n"
+            "/edit age новый_возраст\n"
+            "/edit occupation новое_занятие\n"
+            "/edit hobbies новое_хобби1,новое_хобби2\n"
+            "/edit traits новая_черта1,новая_черта2\n"
+            "/edit style новый_стиль"
+        )
+        return
+    
+    # Проверяем, что есть параметр и значение
+    if len(context.args) < 2:
+        await update.message.reply_text("Ошибка: Недостаточно параметров. Используйте /edit параметр значение")
+        return
+    
+    parameter = context.args[0].lower()
+    value = ' '.join(context.args[1:])
+    
+    # Обрабатываем разные параметры
+    if parameter == 'name':
+        PERSONALITY['name'] = value
+    elif parameter == 'age':
+        try:
+            PERSONALITY['age'] = int(value)
+        except ValueError:
+            await update.message.reply_text("Ошибка: Возраст должен быть числом")
+            return
+    elif parameter == 'occupation':
+        PERSONALITY['occupation'] = value
+    elif parameter == 'hobbies':
+        PERSONALITY['hobbies'] = value.split(',')
+    elif parameter == 'traits':
+        PERSONALITY['personality_traits'] = value.split(',')
+    elif parameter == 'style':
+        PERSONALITY['communication_style'] = value
+    else:
+        await update.message.reply_text("Ошибка: Неверный параметр. Доступные параметры: name, age, occupation, hobbies, traits, style")
+        return
+    
+    await update.message.reply_text(f"Я обновила свой {parameter}!")
+
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -42,7 +96,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "\n"
         "Доступные команды:\n"
         "/help - помощь\n"
-        "/about - обо мне"
+        "/about - обо мне\n"
+        "/edit - редактировать мою личность"
     )
 
 # Обработчик команды /about
@@ -79,6 +134,7 @@ def main():
         application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("about", about_command))
+        application.add_handler(CommandHandler("edit", edit_personality))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         
         logger.info("Бот запущен и готов к работе!")
