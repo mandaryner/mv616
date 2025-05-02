@@ -24,11 +24,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-BOT_TOKEN = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
-OPENROUTER_API_KEY = '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'
-MODEL = 'mistralai/mixtral-8x7b-instruct'
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+
 
 # Загрузка данных
 if os.path.exists('users.json'):
@@ -47,9 +43,7 @@ else:
 # История сообщений (по ID поста)
 conversations = {}
 
-from keep_alive import keep_alive
 
-keep_alive()
 
 async def show_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
