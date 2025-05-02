@@ -249,6 +249,24 @@ def main():
         
         # Запускаем бота в режиме long polling
         logger.info("Бот запущен и готов к работе!")
+        
+        # Настройка Keep Alive
+        import threading
+        import time
+        
+        def keep_alive():
+            while True:
+                try:
+                    # Отправляем простой запрос к Telegram API
+                    application.bot.get_me()
+                    logger.info("Keep Alive: Проверка подключения")
+                except Exception as e:
+                    logger.error(f"Keep Alive ошибка: {str(e)}")
+                time.sleep(300)  # Проверяем каждые 5 минут
+        
+        # Запускаем Keep Alive в отдельном потоке
+        threading.Thread(target=keep_alive, daemon=True).start()
+        
         application.run_polling(allowed_updates=Update.ALL_TYPES)
         
     except Exception as e:
