@@ -67,10 +67,33 @@ async def generate_response(prompt):
 # Функция поиска информации
 async def search_info(query):
     try:
-        if PERSONALITY['knowledge_source'] == 'google':
-            search_url = f'https://www.google.com/search?q={query}'
+        # Улучшенный поиск с использованием Google
+        search_url = f'https://www.google.com/search?q={query}'
+        
+        # Добавляем заголовки для более корректного поиска
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        response = requests.get(search_url, headers=headers)
+        if response.status_code == 200:
+            # Извлекаем основные результаты поиска
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Ищем первые несколько результатов
+            results = []
+            for result in soup.find_all('div', class_='g')[:3]:
+                title = result.find('h3')
+                if title:
+                    results.append(title.text.strip())
+            
+            if results:
+                return f"Найденные результаты:\n{'\n'.join(results)}"
+            else:
+                return "Извините, не удалось найти информацию"
         else:
-            search_url = f'https://yandex.ru/search/?text={query}'
+            return f"Ошибка поиска: {response.status_code}"
         
         response = requests.get(search_url)
         if response.status_code == 200:

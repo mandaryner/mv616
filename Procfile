@@ -1,1 +1,1 @@
-web: python mollybot.py
+web: python app.py
