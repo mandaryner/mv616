@@ -112,43 +112,46 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Я общаюсь в стиле: {PERSONALITY['communication_style']}"
     )
 
-# Функция генерации ответа через Hugging Face
+# Функция генерации ответа через Qwen
 async def generate_response(prompt):
     try:
-        # Логируем запрос
-        logger.info(f"Отправляю запрос к Hugging Face с текстом: {prompt[:100]}...")
-        
-        # Формируем запрос к Hugging Face
+        # Формируем запрос к Qwen
         headers = {
-            'Authorization': f'Bearer {HF_API_KEY}',
             'Content-Type': 'application/json'
         }
         
+        # Промпт для Qwen
+        prompt_text = f"""
+Ты {PERSONALITY['name']}, {PERSONALITY['age']} лет, {PERSONALITY['occupation']}.
+Твои хобби: {', '.join(PERSONALITY['hobbies'])}
+Твои черты характера: {', '.join(PERSONALITY['personality_traits'])}
+Ты общаешься в стиле: {PERSONALITY['communication_style']}
+
+Пользователь написал: {prompt}
+Ответь как живой человек, используя свой стиль общения.
+"""
+        
         data = {
-            "inputs": prompt,
-            "parameters": {
-                "max_new_tokens": 200,
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "do_sample": True
-            }
+            "prompt": prompt_text,
+            "max_tokens": 200,
+            "temperature": 0.7,
+            "top_p": 0.9
         }
         
-        # Попытка отправки запроса с таймаутом
+        # Отправляем запрос к Qwen
         try:
             response = requests.post(
-                'https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf',
+                'https://qwen.aliyun.com/api/v1/chat/completions',
                 headers=headers,
                 json=data,
-                timeout=30  # Устанавливаем таймаут в 30 секунд
+                timeout=30
             )
             
             if response.status_code == 200:
                 result = response.json()
-                logger.info(f"Получен успешный ответ от Hugging Face")
-                return result[0]['generated_text']
+                return result['choices'][0]['message']['content']
             else:
-                logger.error(f"Ошибка API Hugging Face: {response.text}")
+                logger.error(f"Ошибка API Qwen: {response.text}")
                 logger.error(f"Код ошибки: {response.status_code}")
                 return None
         except requests.exceptions.Timeout:
