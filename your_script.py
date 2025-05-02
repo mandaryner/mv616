@@ -10,6 +10,14 @@ import sys
 # Добавляем путь к текущей директории
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Проверка обязательных переменных окружения
+required_env_vars = ['BOT_TOKEN', 'OPENROUTER_API_KEY', 'RENDER_SERVICE_NAME', 'WEBHOOK_SECRET']
+missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+
+if missing_vars:
+    raise ValueError(f"❌ Отсутствуют необходимые переменные окружения: {', '.join(missing_vars)}\n"
+                     f"Пожалуйста, убедитесь, что эти переменные настроены в панели управления Render.")
+
 # Load environment variables
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
@@ -22,6 +30,14 @@ PORT = int(os.getenv('PORT', '8080'))
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Логирование настроек
+logger.info(f"⚙️ Настройки бота:")
+logger.info(f"  - PORT: {PORT}")
+logger.info(f"  - RENDER_SERVICE_NAME: {RENDER_SERVICE_NAME}")
+logger.info(f"  - ADMIN_IDS: {ADMIN_IDS}")
+logger.info("  - OpenRouter API ключ: Установлен")
+logger.info("  - Бот токен: Установлен")
 
 
 
