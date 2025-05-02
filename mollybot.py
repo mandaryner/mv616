@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 # Токен бота
 BOT_TOKEN = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
 
+# API ключ Hugging Face
+HF_API_KEY = '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'
+
 # Личность бота
 PERSONALITY = {
     'name': 'Молли',
@@ -109,6 +112,41 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Я общаюсь в стиле: {PERSONALITY['communication_style']}"
     )
 
+# Функция генерации ответа через Hugging Face
+async def generate_response(prompt):
+    try:
+        # Формируем запрос к Hugging Face
+        headers = {
+            'Authorization': f'Bearer {HF_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        data = {
+            "inputs": prompt,
+            "parameters": {
+                "max_new_tokens": 200,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "do_sample": True
+            }
+        }
+        
+        response = requests.post(
+            'https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf',
+            headers=headers,
+            json=data
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result[0]['generated_text']
+        else:
+            logger.error(f"Ошибка API Hugging Face: {response.text}")
+            return None
+    except Exception as e:
+        logger.error(f"Ошибка при генерации ответа: {str(e)}")
+        return None
+
 # Обработчик текстовых сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text.lower()
@@ -117,11 +155,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет! Я обрабатываю ваш запрос. Пожалуйста, подождите немного.")
     
     try:
-        # Простой ответ на сообщение
-        response = f"Я поняла: {user_message}\n" \
-                   "Я всегда готова помочь и поддержать тебя!"
+        # Формируем промпт для нейросети
+        prompt = f"""
+        Ты {PERSONALITY['name']}, {PERSONALITY['age']} лет, {PERSONALITY['occupation']}.
+        Твои хобби: {', '.join(PERSONALITY['hobbies'])}
+        Твои черты характера: {', '.join(PERSONALITY['personality_traits'])}
+        Ты общаешься в стиле: {PERSONALITY['communication_style']}
+
+        Пользователь написал: {update.message.text}
         
-        await update.message.reply_text(response)
+        Ответь как живой человек, используя свой стиль общения.
+        """
+        
+        # Генерируем ответ через Hugging Face
+        response = await generate_response(prompt)
+        if response:
+            # Удаляем промпт из ответа
+            response = response.replace(prompt, '').strip()
+            await update.message.reply_text(response)
+        else:
+            await update.message.reply_text("Извините, не удалось сгенерировать ответ. Попробуйте позже.")
     except Exception as e:
         logger.error(f"Ошибка при обработке сообщения: {str(e)}")
         await update.message.reply_text("Извините, произошла ошибка при обработке вашего сообщения. Попробуйте позже.")
