@@ -4,9 +4,6 @@ import logging
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
 import requests
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
-import queue
 from datetime import datetime
 import re
 
@@ -17,15 +14,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Очередь для обработки обновлений
-update_queue = queue.Queue()
-
 # Загрузка переменных окружения
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 HF_API_KEY = os.getenv('HF_API_KEY')
-RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME', 'mollybot')
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'mollybot_secret')
-PORT = int(os.getenv('PORT', '8080'))
 
 # Личность бота
 PERSONALITY = {
@@ -37,25 +28,6 @@ PERSONALITY = {
     'communication_style': 'дружеский и поддерживаемый',
     'knowledge_source': 'google'  # google или yandex
 }
-
-# Функция обработки HTTP запросов
-class WebhookHandler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        if self.path == '/webhook':
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            try:
-                update = Update.de_json(json.loads(post_data), context.bot)
-                update_queue.put(update)
-                self.send_response(200)
-                self.end_headers()
-            except Exception as e:
-                logger.error(f"Ошибка при обработке вебхука: {str(e)}")
-                self.send_response(400)
-                self.end_headers()
-        else:
-            self.send_response(404)
-            self.end_headers()
 
 # Функция генерации ответа
 async def generate_response(prompt):
@@ -187,17 +159,30 @@ async def style(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Обработчик текстовых сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_message = update.message.text
+    user_message = update.message.text.lower()
     
-    # Формируем промпт с учетом личности
+    # Проверяем, упомянули ли Молли
+    if 'молли' not in user_message:
+        return
+
+    # Получаем информацию из интернета
+    search_query = update.message.text  # Используем полный текст сообщения для поиска
+    search_result = await search_info(search_query)
+    
+    # Формируем промпт с учетом найденной информации
     prompt = f"""
-    Ты Молли, {PERSONALITY['age']} лет, {PERSONALITY['occupation']}.\n"
-    "Твои хобби: {', '.join(PERSONALITY['hobbies'])}\n"
-    "Твои черты характера: {', '.join(PERSONALITY['personality_traits'])}\n"
-    "Ты общаешься в стиле: {PERSONALITY['communication_style']}\n"
-    "\n"
-    "Пользователь написал: {user_message}\n"
-    "Ответь как живой человек, используя свой стиль общения."
+    Ты Молли, {PERSONALITY['age']} лет, {PERSONALITY['occupation']}.
+    Твои хобби: {', '.join(PERSONALITY['hobbies'])}
+    Твои черты характера: {', '.join(PERSONALITY['personality_traits'])}
+    Ты общаешься в стиле: {PERSONALITY['communication_style']}
+
+    Пользователь написал: {update.message.text}
+    
+    Найденная информация: {search_result}
+    
+    Используй найденную информацию для ответа, если она есть.
+    Если информация не найдена или неактуальна, ответь на основе своих знаний.
+    Ответь как живой человек, используя свой стиль общения.
     """
     
     response = await generate_response(prompt)
