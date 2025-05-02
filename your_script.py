@@ -61,6 +61,69 @@ WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'default_secret')
 # Настройка вебхука
 WEBHOOK_PATH = f"/{WEBHOOK_SECRET}/"
 
+# Обработчик команды /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отправляет сообщение при команде /start"""
+    keyboard = [
+        ['⚙️ Настройки'],
+        ['🔍 Поиск'],
+        ['📊 Статистика']
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        'Привет! Я бот Молли. Готова помочь вам с любыми вопросами.',
+        reply_markup=reply_markup
+    )
+
+# Обработчик команды /settings
+async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Отправляет меню настроек"""
+    keyboard = [
+        ['🔄 Сменить личность'],
+        ['⚙️ Настройки персонализации'],
+        ['🔙 Назад']
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        '⚙️ Меню настроек',
+        reply_markup=reply_markup
+    )
+
+# Обработчик всех текстовых сообщений
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обрабатывает все текстовые сообщения"""
+    try:
+        # Проверяем, что это текстовое сообщение
+        if not update.message or not update.message.text:
+            return
+
+        # Получаем текст сообщения
+        user_message = update.message.text.lower()
+        
+        # Проверяем наличие слова "Молли"
+        if "молли" not in user_message:
+            return
+
+        # Получаем текст без слова "молли"
+        message_text = user_message.replace("молли", "").strip()
+        
+        # Формируем промпт для модели
+        prompt = f"Ты Молли, твой пользователь написал: {message_text}\nОтветь как живой человек:"
+        
+        # Генерируем ответ
+        response = await generate_response(prompt)
+        
+        if response:
+            await update.message.reply_text(response)
+        else:
+            await update.message.reply_text("❌ Извините, не удалось сгенерировать ответ")
+
+    except Exception as e:
+        logger.error(f"Ошибка в handle_message: {str(e)}")
+        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
+
 # Функция для поиска в Google
 async def google_search(query, context):
     try:
@@ -874,16 +937,14 @@ if __name__ == '__main__':
         application = ApplicationBuilder().token(BOT_TOKEN).build()
         
         # Настраиваем обработчики
-        application.add_handler(CommandHandler('settings', settings))
         application.add_handler(CommandHandler('start', start))
-        application.add_handler(CommandHandler('help', help_command))
-        application.add_handler(CommandHandler('stats', get_statistics))
-        application.add_handler(CommandHandler('add_banned_word', add_banned_word))
-        application.add_handler(CommandHandler('remove_banned_word', remove_banned_word))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_reply))
+        application.add_handler(CommandHandler('settings', settings))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-        # Удаляем старый вебхук
+        # Проверяем вебхук
         try:
+            webhook_info = application.bot.get_webhook_info()
+            logger.info(f"Текущий вебхук: {webhook_info.url}")
             application.bot.delete_webhook()
             logger.info("✅ Старый вебхук удален")
         except Exception as e:
