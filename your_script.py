@@ -29,6 +29,10 @@ async def google_search(query, context):
 # Добавляем путь к текущей директории
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Проверка обязательных переменных окружения
 required_env_vars = ['BOT_TOKEN', 'OPENROUTER_API_KEY', 'RENDER_SERVICE_NAME', 'WEBHOOK_SECRET']
 missing_vars = [var for var in required_env_vars if not os.getenv(var)]
@@ -50,6 +54,19 @@ ADMIN_IDS = set(os.getenv('ADMIN_IDS', '547527683').split(','))
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', '6164320')
 RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME', 'mv616')
 PORT = int(os.getenv('PORT', '8080'))
+
+# Логирование настроек
+logger.info(f"⚙️ Настройки бота:")
+logger.info(f"  - PORT: {PORT}")
+logger.info(f"  - RENDER_SERVICE_NAME: {RENDER_SERVICE_NAME}")
+logger.info(f"  - ADMIN_IDS: {ADMIN_IDS}")
+logger.info("  - OpenRouter API ключ: Установлен")
+logger.info("  - Бот токен: Установлен")
+logger.info(f"  - Google API ключ: {'Установлен' if GOOGLE_API_KEY else 'Не установлен'}")
+logger.info(f"  - Google CSE ID: {'Установлен' if GOOGLE_CSE_ID else 'Не установлен'}")
+logger.info(f"  - Google Client ID: {'Установлен' if GOOGLE_CLIENT_ID else 'Не установлен'}")
+logger.info(f"  - Вебхук секрет: {'Установлен' if WEBHOOK_SECRET else 'Не установлен'}")
+logger.info("  - Модель: " + MODEL)
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
