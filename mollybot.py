@@ -13,11 +13,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Настройки OpenRouter
+OPENROUTER_API_KEY = "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"
+openai.api_key = OPENROUTER_API_KEY
+openai.api_base = "https://openrouter.ai/api/v1"
+
 # Токен бота
 BOT_TOKEN = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
 
-# API ключ OpenAI
-OPENAI_API_KEY = "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"
+
 
 # Личность бота
 PERSONALITY = {
@@ -32,35 +36,29 @@ PERSONALITY = {
 # История диалога
 conversation_history = []
 
-# Функция для инициализации OpenAI
+# Функция для инициализации OpenRouter
 def init_openai():
     try:
-        # Настройка OpenAI
-        openai.api_key = OPENAI_API_KEY
-        if not openai.api_key:
-            logger.error("API ключ OpenAI не найден!")
-            return False
-        
-        # Проверяем подключение
+        # Проверяем подключение к OpenRouter
         try:
             openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model="openai/gpt-3.5-turbo",
                 messages=[{"role": "user", "content": "Test connection"}],
                 max_tokens=1
             )
-            logger.info("Успешное подключение к OpenAI")
+            logger.info("Успешное подключение к OpenRouter")
             return True
         except Exception as e:
-            logger.error(f"Ошибка подключения к OpenAI: {str(e)}")
+            logger.error(f"Ошибка подключения к OpenRouter: {str(e)}")
             return False
     except Exception as e:
-        logger.error(f"Ошибка инициализации OpenAI: {str(e)}")
+        logger.error(f"Ошибка инициализации OpenRouter: {str(e)}")
         return False
 
-# Функция для получения ответа от OpenAI
+# Функция для получения ответа от OpenRouter
 def get_openai_response(prompt):
     try:
-        # Формируем сообщение для OpenAI
+        # Формируем сообщение для OpenRouter
         messages = [
             {"role": "system", "content": f"""
             Ты {PERSONALITY['name']}, {PERSONALITY['age']} лет, {PERSONALITY['occupation']}.
@@ -75,18 +73,17 @@ def get_openai_response(prompt):
         # Добавляем историю диалога
         messages.extend(conversation_history[-5:])  # Используем последние 5 сообщений
         
-        # Получаем ответ от OpenAI
+        # Получаем ответ от OpenRouter
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model="openai/gpt-3.5-turbo",
             messages=messages,
             max_tokens=150,
-            temperature=0.7,
-            organization=OPENAI_ORGANIZATION
+            temperature=0.7
         )
         
         return response.choices[0].message.content
     except Exception as e:
-        logger.error(f"Ошибка при получении ответа от OpenAI: {str(e)}")
+        logger.error(f"Ошибка при получении ответа от OpenRouter: {str(e)}")
         return None
 
 # Функция для редактирования личности
