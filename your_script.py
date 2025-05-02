@@ -610,7 +610,9 @@ async def remove_banned_word(update: Update, context: ContextTypes.DEFAULT_TYPE)
 def main():
     # Настройка вебхука
     WEBHOOK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/webhook"
+    PORT = int(os.getenv('PORT', '8080'))
     
+    # Создаем приложение
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     
     # Удаляем старый вебхук, если он существует
@@ -631,6 +633,18 @@ def main():
     except Exception as e:
         print(f"❌ Ошибка при установке вебхука: {str(e)}")
         return
+
+    # Добавляем обработчики (уже настроены выше)
+    pass  # Эти обработчики уже добавлены выше в функции main()
+
+    # Запускаем веб-сервер
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path="/webhook",
+        webhook_url=WEBHOOK_URL,
+        secret_token=WEBHOOK_SECRET
+    )
     
     # Добавляем обработчики
     app.add_handler(CommandHandler('settings', settings))
