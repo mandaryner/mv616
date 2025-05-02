@@ -2,6 +2,8 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+import openai
+import json
 
 # Настройка логирования
 logging.basicConfig(
@@ -22,6 +24,66 @@ PERSONALITY = {
     'personality_traits': ['дружелюбная', 'умная', 'творческая'],
     'communication_style': 'дружеский и поддерживаемый'
 }
+
+# История диалога
+conversation_history = []
+
+# Функция для инициализации OpenAI
+async def init_openai():
+    try:
+        # Настройка OpenAI
+        openai.api_key = os.getenv('OPENAI_API_KEY')
+        if not openai.api_key:
+            logger.warning("API ключ OpenAI не найден. Использую бесплатный режим.")
+            openai.api_key = "sk-..."  # Используем бесплатный API ключ
+        
+        # Проверяем подключение
+        try:
+            await openai.ChatCompletion.acreate(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": "Test connection"}],
+                max_tokens=1
+            )
+            logger.info("Успешное подключение к OpenAI")
+        except Exception as e:
+            logger.error(f"Ошибка подключения к OpenAI: {str(e)}")
+            logger.info("Используем бесплатный режим")
+            
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка инициализации OpenAI: {str(e)}")
+        return False
+
+# Функция для получения ответа от OpenAI
+async def get_openai_response(prompt):
+    try:
+        # Формируем сообщение для OpenAI
+        messages = [
+            {"role": "system", "content": f"""
+            Ты {PERSONALITY['name']}, {PERSONALITY['age']} лет, {PERSONALITY['occupation']}.
+            Твои хобби: {', '.join(PERSONALITY['hobbies'])}
+            Твои черты характера: {', '.join(PERSONALITY['personality_traits'])}
+            Ты общаешься в стиле: {PERSONALITY['communication_style']}
+            Отвечай на русском языке.
+            """},
+            {"role": "user", "content": prompt}
+        ]
+        
+        # Добавляем историю диалога
+        messages.extend(conversation_history[-5:])  # Используем последние 5 сообщений
+        
+        # Получаем ответ от OpenAI
+        response = await openai.ChatCompletion.acreate(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            max_tokens=150,
+            temperature=0.7
+        )
+        
+        return response.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Ошибка при получении ответа от OpenAI: {str(e)}")
+        return None
 
 # Функция для редактирования личности
 async def edit_personality(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -111,17 +173,29 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Обработчик текстовых сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_message = update.message.text.lower()
+    user_message = update.message.text
     
     # Отправляем сообщение о том, что обрабатываем запрос
     await update.message.reply_text("Привет! Я обрабатываю ваш запрос. Пожалуйста, подождите немного.")
     
     try:
-        # Простой ответ на сообщение
-        response = f"Я поняла: {user_message}\n" \
-                   "Я всегда готова помочь и поддержать тебя!"
+        # Сохраняем сообщение в историю диалога
+        conversation_history.append({"role": "user", "content": user_message})
         
-        await update.message.reply_text(response)
+        # Получаем ответ от OpenAI
+        response = await get_openai_response(user_message)
+        
+        if response:
+            # Сохраняем ответ в историю диалога
+            conversation_history.append({"role": "assistant", "content": response})
+            
+            # Ограничиваем длину истории диалога
+            if len(conversation_history) > 10:
+                conversation_history.pop(0)
+            
+            await update.message.reply_text(response)
+        else:
+            await update.message.reply_text("Извините, не удалось получить ответ. Попробуйте позже.")
     except Exception as e:
         logger.error(f"Ошибка при обработке сообщения: {str(e)}")
         await update.message.reply_text("Извините, произошла ошибка при обработке вашего сообщения. Попробуйте позже.")
@@ -129,6 +203,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Основная функция
 def main():
     try:
+        # Инициализируем OpenAI
+        if not asyncio.run(init_openai()):
+            logger.error("Не удалось инициализировать OpenAI")
+            return
+        
         application = ApplicationBuilder().token(BOT_TOKEN).build()
         
         application.add_handler(CommandHandler("start", start))
