@@ -60,6 +60,35 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Настройка вебхука
+WEBHOOK_PATH = f"/{WEBHOOK_SECRET}/"
+
+# Класс для обработки вебхуков
+class WebhookHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        if not self.path.startswith(WEBHOOK_PATH):
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        
+        try:
+            update = Update.de_json(json.loads(post_data), application.bot)
+            application.process_update(update)
+            self.send_response(200)
+            self.end_headers()
+        except Exception as e:
+            logger.error(f"Ошибка при обработке вебхука: {str(e)}")
+            self.send_response(500)
+            self.end_headers()
+
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
 # Проверка обязательных переменных окружения
 required_env_vars = ['BOT_TOKEN', 'OPENROUTER_API_KEY', 'RENDER_SERVICE_NAME', 'WEBHOOK_SECRET']
 missing_vars = [var for var in required_env_vars if not os.getenv(var)]
