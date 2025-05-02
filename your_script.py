@@ -475,24 +475,10 @@ async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.reply_to_message:
         return
 
-
-
-    user_message = update.message.text.lower()  # Получаем сообщение пользователя и преобразуем в нижний регистр
+    user_message = update.message.reply_to_message.text
     trigger_words = ["Молли", "молли"]  # Список слов, на которые должен отвечать бот
 
-    if not any(word in user_message for word in trigger_words):
-        return  # Если ни одно из слов не найдено в сообщении, выходим из функции
-
-    # Проверяем, что сообщение на русском языке
-    if not any(char in user_message for char in 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя '):
-        await update.message.reply_text("⚠️ Я отвечаю только на сообщения на русском языке!")
-        return
-
-    user_message = update.message.reply_to_message.text
-    user_message = update.message.text
-
-    if any(word in user_message.lower() for word in banned_words):
-        await update.message.reply_text("⚠️ Сообщение содержит запрещённые слова.")
+    if not any(word in user_message.lower() for word in trigger_words):
         return
 
     thread_id = str(update.message.reply_to_message.message_id)
