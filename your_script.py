@@ -647,7 +647,9 @@ if __name__ == '__main__':
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_reply))
         
         # Настройка вебхука
-        application.run_async(setup_webhook())
+        webhook_url = f"https://{RENDER_SERVICE_NAME}.onrender.com/{WEBHOOK_SECRET}/"
+        application.bot.set_webhook(webhook_url)
+        logger.info(f"✅ Вебхук настроен: {webhook_url}")
         
         # Запуск сервера для вебхука
         server = HTTPServer(('0.0.0.0', PORT), WebhookHandler)
