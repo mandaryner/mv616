@@ -1,10 +1,27 @@
-logging
-json
-telegram Update, ReplyKeyboardMarkup
-from telegram.ext ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
-requests
-os
-re
+import logging
+import json
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
+import requests
+import os
+import re
+import sys
+
+# Добавляем путь к текущей директории
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Load environment variables
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+MODEL = 'mistralai/mixtral-8x7b-instruct'
+ADMIN_IDS = set(os.getenv('ADMIN_IDS', '547527683').split(','))
+WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'your-secret-token')
+RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME')
+PORT = int(os.getenv('PORT', '8080'))
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 BOT_TOKEN = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
@@ -30,7 +47,7 @@ else:
 # История сообщений (по ID поста)
 conversations = {}
 
-from keep_alive keep_alive
+from keep_alive import keep_alive
 
 keep_alive()
 
@@ -504,46 +521,31 @@ async def remove_banned_word(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"⚠️ Слово '{word}' не найдено в списке запрещённых слов.")
 
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-
-    requests
-
-    def google_search(search_term, api_key, cse_id, **kwargs):
-        query_params = {
-            'q': search_term,
-            'key': api_key,
-            'cx': cse_id
-        }
-        query_params.update(kwargs)
-        response = requests.get('https://www.googleapis.com/customsearch/v1', params=query_params)
-        return response.json()
-
-    # Пример использования
-    search_results = google_search(
-        'Python programming',
-        api_key='YOUR_API_KEY',
-        cse_id='YOUR_CSE_ID'
-    )
-
-    # Обработка результатов
-    if 'items' in search_results:
-        for item in search_results['items']:
-            print(item['title'], item['link'])
-    else:
-        print('Нет результатов')
-
+    # Настройка вебхука
+    WEBHOOK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/webhook"
     
-    # Добавляем команду регистрации
-
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    # Устанавливаем вебхук
+    app.bot.set_webhook(url=WEBHOOK_URL, secret_token=WEBHOOK_SECRET)
+    
+    # Добавляем обработчики
     app.add_handler(CommandHandler('settings', settings))
     app.add_handler(CommandHandler('add_banned_word', add_banned_word))
     app.add_handler(CommandHandler('remove_banned_word', remove_banned_word))
     app.add_handler(MessageHandler(filters.TEXT & filters.REPLY, handle_reply))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_settings))
-
-    print("🤖 Бот запущен...")
-    app.run_polling()
+    
+    # Запускаем веб-сервер
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path="/webhook",
+        webhook_url=WEBHOOK_URL,
+        secret_token=WEBHOOK_SECRET
+    )
+    
+    print("🤖 Бот запущен в режиме вебхука...")
 
 if __name__ == '__main__':
     main()
