@@ -56,6 +56,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 # Добавляем путь к текущей директории
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Загрузка переменных окружения
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME')
+WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'default_secret')
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
