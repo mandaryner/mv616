@@ -17,7 +17,7 @@ def start(update, context):
 def main():
     """Запуск бота"""
     # Вставьте сюда ваш токен бота
-    bot_token = 'ВАШ_ТОКЕН_ЗДЕСЬ'
+    bot_token = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
 
     # Создаем объект Updater и получаем диспетчера
     updater = Updater(bot_token)
