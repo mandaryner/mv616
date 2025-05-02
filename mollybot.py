@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
 
 # API ключ OpenAI
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = "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"
 
 # Личность бота
 PERSONALITY = {
