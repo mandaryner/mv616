@@ -6,20 +6,72 @@ import requests
 import os
 import re
 import sys
-import json
-from googleapiclient.discovery import build
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.parse
 import hmac
 import hashlib
+from googleapiclient.discovery import build
+
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Загрузка переменных окружения
+BOT_TOKEN = "7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14"
+RENDER_SERVICE_NAME = "mv616"
+WEBHOOK_SECRET = "NZpMVnfpTym3jfpzJ8A6f8axlRSukKnFNLOabTmOIfU"
+GOOGLE_CLIENT_ID = "299175279064-nh9d7r0h57kj4r2cpsidrrd6in5trafn.apps.googleusercontent.com"
+GOOGLE_CSE_ID = "34da120c8e7b34c06"
+
+# Настройка вебхука
+WEBHOOK_PATH = f"/{WEBHOOK_SECRET}/"
+
+# Проверка обязательных переменных
+REQUIRED_VARS = ['BOT_TOKEN', 'RENDER_SERVICE_NAME', 'WEBHOOK_SECRET']
+missing_vars = [var for var in REQUIRED_VARS if not globals()[var]]
+if missing_vars:
+    raise ValueError(f"❌ Отсутствуют обязательные переменные: {', '.join(missing_vars)}")
+
+# Настройка Google API
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')  # Если нужно использовать API ключ
+if GOOGLE_API_KEY:
+    logger.info("✅ Google API ключ загружен")
+else:
+    logger.warning("⚠️ Google API ключ не найден")
+
+# Настройка порта
+PORT = int(os.getenv('PORT', '8080'))
+logger.info(f"✅ Порт установлен: {PORT}")
+
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Загрузка переменных окружения
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME')
+WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'default_secret')
+
+# Настройка вебхука
+WEBHOOK_PATH = f"/{WEBHOOK_SECRET}/"
 
 # Функция для поиска в Google
 async def google_search(query, context):
     try:
-        service = build('customsearch', 'v1', developerKey=os.getenv('GOOGLE_API_KEY'))
+        if not GOOGLE_API_KEY:
+            logger.warning("⚠️ Google API ключ не настроен")
+            return []
+
+        service = build('customsearch', 'v1', developerKey=GOOGLE_API_KEY)
         result = service.cse().list(
             q=query,
-            cx=os.getenv('GOOGLE_CSE_ID'),
+            cx=GOOGLE_CSE_ID,
             num=5
         ).execute()
         
@@ -27,7 +79,8 @@ async def google_search(query, context):
             return result['items']
         return []
     except Exception as e:
-        logger.error(f"Ошибка при поиске в Google: {str(e)}")
+        logger.error(f"❌ Ошибка при поиске в Google: {str(e)}")
+        return []
         return []
 
 # Обработчик команды /start
@@ -471,6 +524,30 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # Функция обработки ответов
+async def generate_response(prompt):
+    """Генерирует ответ с помощью Ollama"""
+    try:
+        # Отправляем запрос к Ollama
+        response = requests.post(
+            "http://ollama:11434/api/generate",
+            json={
+                "model": "mistral",
+                "prompt": prompt,
+                "stream": False,
+                "temperature": 0.7,
+                "top_p": 0.9
+            }
+        )
+        
+        if response.status_code == 200:
+            return response.json()["response"]
+        else:
+            logger.error(f"Ошибка API: {response.json()}")
+            return None
+    except Exception as e:
+        logger.error(f"Ошибка при генерации ответа: {str(e)}")
+        return None
+
 async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # Проверяем, что это текстовое сообщение
@@ -480,14 +557,58 @@ async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Получаем текст сообщения
         user_message = update.message.text.lower()
         
-        # Проверяем наличие слова "Молли" в любом регистре
+        # Проверяем наличие слова "Молли"
         if "молли" not in user_message:
             return
 
-        # Проверяем API ключ
-        if not OPENROUTER_API_KEY:
-            await update.message.reply_text("❌ Ошибка: API ключ OpenRouter не настроен!")
+        # Получаем текст без слова "молли"
+        message_text = user_message.replace("молли", "").strip()
+        
+        # Формируем промпт для модели
+        prompt = f"Ты Молли, твой пользователь написал: {message_text}\nОтветь как живой человек:"
+        
+        # Генерируем ответ
+        response = await generate_response(prompt)
+        
+        if response:
+            await update.message.reply_text(response)
+        else:
+            await update.message.reply_text("❌ Извините, не удалось сгенерировать ответ")
+
+    except Exception as e:
+        logger.error(f"Ошибка в handle_reply: {str(e)}")
+        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
+        if not update.message or not update.message.text:
             return
+
+        # Получаем текст сообщения
+        user_message = update.message.text.lower()
+        
+        # Проверяем наличие слова "Молли"
+        if "молли" not in user_message:
+            return
+
+        # Получаем текст без слова "молли"
+        message_text = user_message.replace("молли", "").strip()
+        
+        # Формируем промпт для модели
+        prompt = f"Ты Молли, твой пользователь написал: {message_text}\nОтветь как живой человек:"
+        
+        # Генерируем ответ
+        response = await generate_response(prompt)
+        
+        if response:
+            await update.message.reply_text(response)
+        else:
+            await update.message.reply_text("❌ Извините, не удалось сгенерировать ответ")
+
+    except Exception as e:
+        logger.error(f"Ошибка в handle_reply: {str(e)}")
+        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
+
+    except Exception as e:
+        logger.error(f"Ошибка в handle_reply: {str(e)}")
+        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
 
         # Получаем ID чата
         chat_id = update.message.chat_id
@@ -733,6 +854,14 @@ def main():
 
 async def setup_webhook():
 if __name__ == '__main__':
+    # Проверяем обязательные переменные окружения
+    required_env_vars = ['BOT_TOKEN', 'RENDER_SERVICE_NAME', 'WEBHOOK_SECRET']
+    missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+    
+    if missing_vars:
+        logger.error(f"❌ Отсутствуют обязательные переменные окружения: {', '.join(missing_vars)}")
+        exit(1)
+
     # Настройка логирования
     logging.basicConfig(
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -740,17 +869,55 @@ if __name__ == '__main__':
     )
     logger = logging.getLogger(__name__)
 
-    # Создаем приложение
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
-    
-    # Настраиваем обработчики
-    application.add_handler(CommandHandler('settings', settings))
-    application.add_handler(CommandHandler('start', start))
-    application.add_handler(CommandHandler('help', help_command))
-    application.add_handler(CommandHandler('stats', get_statistics))
-    application.add_handler(CommandHandler('add_banned_word', add_banned_word))
-    application.add_handler(CommandHandler('remove_banned_word', remove_banned_word))
-    application.add_handler(MessageHandler(filters.REPLY, handle_reply))
+    try:
+        # Создаем приложение
+        application = ApplicationBuilder().token(BOT_TOKEN).build()
+        
+        # Настраиваем обработчики
+        application.add_handler(CommandHandler('settings', settings))
+        application.add_handler(CommandHandler('start', start))
+        application.add_handler(CommandHandler('help', help_command))
+        application.add_handler(CommandHandler('stats', get_statistics))
+        application.add_handler(CommandHandler('add_banned_word', add_banned_word))
+        application.add_handler(CommandHandler('remove_banned_word', remove_banned_word))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_reply))
+
+        # Удаляем старый вебхук
+        try:
+            application.bot.delete_webhook()
+            logger.info("✅ Старый вебхук удален")
+        except Exception as e:
+            logger.error(f"⚠️ Ошибка при удалении старого вебхука: {str(e)}")
+
+        # Устанавливаем новый вебхук
+        WEBHOOK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/webhook"
+        PORT = int(os.getenv('PORT', '8080'))
+        
+        try:
+            application.bot.set_webhook(
+                url=WEBHOOK_URL,
+                secret_token=WEBHOOK_SECRET,
+                allowed_updates=['message']
+            )
+            logger.info(f"✅ Вебхук установлен: {WEBHOOK_URL}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка при установке вебхука: {str(e)}")
+            exit(1)
+
+        # Запускаем веб-сервер
+        logger.info(f"🚀 Запуск веб-сервера на порту {PORT}...")
+        
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path="/webhook",
+            webhook_url=WEBHOOK_URL,
+            secret_token=WEBHOOK_SECRET
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Критическая ошибка: {str(e)}")
+        raise
 
     # Удаляем старый вебхук
     try:
