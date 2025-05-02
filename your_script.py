@@ -627,6 +627,11 @@ def main():
     
     print("🤖 Бот запущен в режиме вебхука...")
 
+async def setup_webhook():
+    webhook_url = f"https://{RENDER_SERVICE_NAME}.onrender.com/{WEBHOOK_SECRET}/"
+    await application.bot.set_webhook(webhook_url)
+    logger.info(f"✅ Вебхук настроен: {webhook_url}")
+
 if __name__ == '__main__':
     # Создаем приложение
     application = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -642,9 +647,7 @@ if __name__ == '__main__':
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_reply))
         
         # Настройка вебхука
-        webhook_url = f"https://{RENDER_SERVICE_NAME}.onrender.com/{WEBHOOK_SECRET}/"
-        await application.bot.set_webhook(webhook_url)
-        logger.info(f"✅ Вебхук настроен: {webhook_url}")
+        application.run_async(setup_webhook())
         
         # Запуск сервера для вебхука
         server = HTTPServer(('0.0.0.0', PORT), WebhookHandler)
