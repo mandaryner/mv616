@@ -221,12 +221,11 @@ async def stop_previous_instance():
     except Exception as e:
         logger.error(f"Ошибка при остановке предыдущего экземпляра: {str(e)}")
 
-# Основная функция
-def main():
+# Асинхронная функция для запуска бота
+async def run_bot():
     try:
         # Останавливаем предыдущий экземпляр
-        import asyncio
-        asyncio.run(stop_previous_instance())
+        await stop_previous_instance()
         
         application = ApplicationBuilder().token(BOT_TOKEN).build()
         
@@ -244,4 +243,5 @@ def main():
         raise
 
 if __name__ == '__main__':
-    main()
+    import asyncio
+    asyncio.run(run_bot())
