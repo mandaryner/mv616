@@ -472,21 +472,16 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Функция обработки ответов
 async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.reply_to_message:
-        return
-
     try:
+        # Проверяем, что это текстовое сообщение
+        if not update.message or not update.message.text:
+            return
+
         # Получаем текст сообщения
-        user_message = update.message.reply_to_message.text
-        if not user_message:
-            return
-
-        # Проверяем тип сообщения
-        if update.message.reply_to_message.content_type != 'text':
-            return
-
-        # Проверяем наличие слова "Молли" в сообщении
-        if "Молли" not in user_message and "молли" not in user_message:
+        user_message = update.message.text.lower()
+        
+        # Проверяем наличие слова "Молли" в любом регистре
+        if "молли" not in user_message:
             return
 
         # Проверяем API ключ
@@ -499,8 +494,14 @@ async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Обрабатываем сообщение
         try:
-            # Получаем текст сообщения, на которое отвечаем
-            original_post = update.message.reply_to_message.text
+            # Проверяем, является ли это приветствием
+            greetings = ["привет", "hello", "hi", "добрый"]
+            if any(greeting in user_message for greeting in greetings):
+                await update.message.reply_text("Привет! Я Молли, ваш AI ассистент. Чем я могу помочь?")
+                return
+
+            # Получаем текст сообщения
+            message_text = user_message.replace("молли", "").strip()
             
             # Формируем запрос к API
             response = requests.post(
@@ -512,7 +513,7 @@ async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 json={
                     "model": MODEL,
                     "messages": [
-                        {"role": "user", "content": original_post}
+                        {"role": "user", "content": message_text}
                     ]
                 }
             )
@@ -521,16 +522,16 @@ async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply = response.json()['choices'][0]['message']['content']
                 await update.message.reply_text(reply)
             else:
-                await update.message.reply_text("❌ Ошибка при обработке запроса")
+                await update.message.reply_text("❌ Извините, произошла ошибка при обработке запроса")
                 logger.error(f"Ошибка API: {response.json()}")
 
         except Exception as e:
             logger.error(f"Ошибка при обработке сообщения: {str(e)}")
-            await update.message.reply_text("❌ Ошибка при обработке сообщения")
+            await update.message.reply_text("❌ Извините, произошла ошибка при обработке сообщения")
 
     except Exception as e:
         logger.error(f"Ошибка в handle_reply: {str(e)}")
-        await update.message.reply_text("⚠️ Ошибка при обработке сообщения")
+        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
 
     thread_id = str(update.message.reply_to_message.message_id)
     original_post = update.message.reply_to_message.text
