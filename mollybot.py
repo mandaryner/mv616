@@ -10,9 +10,21 @@ import re
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.DEBUG  # Устанавливаем более детальный уровень логирования
 )
 logger = logging.getLogger(__name__)
+
+# Проверяем переменные окружения
+if not BOT_TOKEN:
+    logger.error("Ошибка: Не найден BOT_TOKEN в переменных окружения")
+    exit(1)
+
+if not HF_API_KEY:
+    logger.error("Ошибка: Не найден HF_API_KEY в переменных окружения")
+    exit(1)
+
+logger.info(f"Запуск бота с токеном: {BOT_TOKEN[:10]}...{BOT_TOKEN[-5:]}")
+logger.info(f"HF API ключ: {HF_API_KEY[:10]}...{HF_API_KEY[-5:]}")
 
 # Загрузка переменных окружения
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -67,8 +79,8 @@ async def generate_response(prompt):
 # Функция поиска информации
 async def search_info(query):
     try:
-        # Улучшенный поиск с использованием Google
-        search_url = f'https://www.google.com/search?q={query}'
+        # Используем Yandex API для поиска
+        search_url = f'https://yandex.ru/search/?text={query}'
         
         # Добавляем заголовки для более корректного поиска
         headers = {
@@ -77,33 +89,13 @@ async def search_info(query):
         
         response = requests.get(search_url, headers=headers)
         if response.status_code == 200:
-            # Извлекаем основные результаты поиска
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Ищем первые несколько результатов
-            results = []
-            for result in soup.find_all('div', class_='g')[:3]:
-                title = result.find('h3')
-                if title:
-                    results.append(title.text.strip())
-            
-            if results:
-                return f"Найденные результаты:\n{'\n'.join(results)}"
-            else:
-                return "Извините, не удалось найти информацию"
+            # Возвращаем ссылку на страницу поиска
+            return f"Я нашла информацию по вашему запросу: {search_url}"
         else:
-            return f"Ошибка поиска: {response.status_code}"
-        
-        response = requests.get(search_url)
-        if response.status_code == 200:
-            return response.text
-        else:
-            logger.error(f"Ошибка при поиске: {response.text}")
-            return None
+            return f"Извините, не удалось найти информацию. Попробуйте позже."
     except Exception as e:
-        logger.error(f"Ошибка при поиске: {str(e)}")
-        return None
+        logger.error(f"Ошибка при поиске информации: {str(e)}")
+        return f"Извините, произошла ошибка при поиске. Попробуйте позже."
 
 # Обработчик команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -230,7 +222,13 @@ async def setup_webhook():
 # Основная функция
 def main():
     try:
+        # Проверяем подключение к Telegram API
+        logger.info("Проверка подключения к Telegram API...")
         application = ApplicationBuilder().token(BOT_TOKEN).build()
+        
+        # Получаем информацию о боте
+        bot_info = application.bot.get_me()
+        logger.info(f"Бот успешно подключен: {bot_info.username}")
         
         # Добавляем обработчики команд
         application.add_handler(CommandHandler("start", start))
@@ -242,16 +240,8 @@ def main():
         # Добавляем обработчик текстовых сообщений
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         
-        # Запускаем HTTP сервер для вебхука
-        server = HTTPServer(('0.0.0.0', PORT), WebhookHandler)
-        server_thread = threading.Thread(target=server.serve_forever)
-        server_thread.start()
-        
-        # Настройка вебхука
-        webhook_url = f'https://{RENDER_SERVICE_NAME}.onrender.com/webhook'
-        logger.info(f"Запуск бота с вебхуком: {webhook_url}")
-        
-        # Запуск бота
+        # Запускаем бота в режиме long polling
+        logger.info("Бот запущен и готов к работе!")
         application.run_polling(allowed_updates=Update.ALL_TYPES)
         
     except Exception as e:
