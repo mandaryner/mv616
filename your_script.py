@@ -527,7 +527,16 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     
     # Устанавливаем вебхук
-    app.bot.set_webhook(url=WEBHOOK_URL, secret_token=WEBHOOK_SECRET)
+    try:
+        app.bot.set_webhook(
+            url=WEBHOOK_URL,
+            secret_token=WEBHOOK_SECRET,
+            allowed_updates=['message', 'callback_query']
+        )
+        print(f"✅ Вебхук установлен: {WEBHOOK_URL}")
+    except Exception as e:
+        print(f"❌ Ошибка при установке вебхука: {str(e)}")
+        return
     
     # Добавляем обработчики
     app.add_handler(CommandHandler('settings', settings))
@@ -537,13 +546,18 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_settings))
     
     # Запускаем веб-сервер
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path="/webhook",
-        webhook_url=WEBHOOK_URL,
-        secret_token=WEBHOOK_SECRET
-    )
+    try:
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path="/webhook",
+            webhook_url=WEBHOOK_URL,
+            secret_token=WEBHOOK_SECRET,
+            drop_pending_updates=True
+        )
+        print("🤖 Бот запущен в режиме вебхука...")
+    except Exception as e:
+        print(f"❌ Ошибка при запуске веб-сервера: {str(e)}")
     
     print("🤖 Бот запущен в режиме вебхука...")
 
