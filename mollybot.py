@@ -179,9 +179,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Ошибка при обработке сообщения: {str(e)}")
         await update.message.reply_text("Извините, произошла ошибка при обработке вашего сообщения. Попробуйте позже.")
 
+# Функция для остановки предыдущего экземпляра бота
+async def stop_previous_instance():
+    try:
+        # Создаем временное приложение
+        temp_app = ApplicationBuilder().token(BOT_TOKEN).build()
+        
+        # Получаем список активных вебхуков
+        webhook_info = await temp_app.bot.get_webhook_info()
+        
+        # Если есть активный вебхук, удаляем его
+        if webhook_info.url:
+            await temp_app.bot.delete_webhook()
+            logger.info("Удален предыдущий вебхук")
+        
+        # Очищаем очередь обновлений
+        await temp_app.bot.get_updates(timeout=1)
+        logger.info("Очищена очередь обновлений")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при остановке предыдущего экземпляра: {str(e)}")
+
 # Основная функция
 def main():
     try:
+        # Останавливаем предыдущий экземпляр
+        import asyncio
+        asyncio.run(stop_previous_instance())
+        
         application = ApplicationBuilder().token(BOT_TOKEN).build()
         
         application.add_handler(CommandHandler("start", start))
