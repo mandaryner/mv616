@@ -627,7 +627,14 @@ def main():
     
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     
-    # Устанавливаем вебхук
+    # Удаляем старый вебхук, если он существует
+    try:
+        app.bot.delete_webhook()
+        print("✅ Старый вебхук удален")
+    except Exception as e:
+        print(f"⚠️ Ошибка при удалении старого вебхука: {str(e)}")
+
+    # Устанавливаем новый вебхук
     try:
         app.bot.set_webhook(
             url=WEBHOOK_URL,
