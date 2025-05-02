@@ -1,10 +1,10 @@
 import logging
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
-import os
 import json
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
 import requests
-import sys
+import os
+import re
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 
@@ -16,178 +16,85 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Загрузка переменных окружения
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME')
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
-
-# Проверка обязательных переменных
-if not all([BOT_TOKEN, RENDER_SERVICE_NAME, WEBHOOK_SECRET]):
-    raise ValueError("❌ Отсутствуют обязательные переменные окружения")
-
-# Функция поиска информации
-async def search_info(query):
-    try:
-        # Используем DuckDuckGo API для поиска
-        url = f"https://api.duckduckgo.com/?q={query}&format=json"
-        response = requests.get(url)
-        data = response.json()
-        
-        if data.get('AbstractText'):
-            return data['AbstractText']
-        elif data.get('RelatedTopics'):
-            return data['RelatedTopics'][0]['Text']
-        return None
-    except Exception as e:
-        logger.error(f"Ошибка при поиске информации: {str(e)}")
-        return None
-
-# Функция загрузки личности
-async def load_personality():
-    try:
-        with open('personality.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Ошибка при загрузке личности: {str(e)}")
-        return {
-            "name": "Молли",
-            "age": "22",
-            "interests": ["музыка", "путешествия", "фотография", "программирование"],
-            "personality": {
-                "style": "дружелюбный и живой",
-                "tone": "естественный и теплый",
-                "language": "русскоязычный",
-                "behavior": "человеческое общение"
-            }
-        }
-
-# Обработчик команды /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        'Привет! Я Молли, твой личный ассистент.\n\n' +
-        'Я помогу тебе с любыми вопросами. Просто напиши "Молли" и твой вопрос.'
-    )
-
-# Обработчик сообщений
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    try:
-        # Получаем текст сообщения
-        text = update.message.text.lower()
-        
-        # Проверяем наличие слова "молли"
-        if "молли" not in text:
-            return
-            
-        # Удаляем слово "молли" из сообщения
-        message_text = text.replace("молли", "").strip()
-
-        # Загружаем личность
-        personality = await load_personality()
-        
-        # Формируем ответ
-        response = f"Привет! Я {personality['name']}, мне {personality['age']} лет. "
-        response += f"Я интересуюсь {', '.join(personality['interests'])}. "
-        
-        # Если в сообщении есть вопрос, ищем информацию
-        if '?' in message_text:
-            search_result = await search_info(message_text)
-            if search_result:
-                response += f"\nПо твоему вопросу я нашла: {search_result}"
-        else:
-            # Генерируем живой ответ
-            response += "\nКак я могу помочь тебе сегодня?"
-
-        await update.message.reply_text(response)
-
-    except Exception as e:
-        logger.error(f"Ошибка в handle_message: {str(e)}")
-        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
-
-if __name__ == '__main__':
-    try:
-        # Создаем приложение
-        application = ApplicationBuilder().token(BOT_TOKEN).build()
-        
-        # Настраиваем обработчики
-        application.add_handler(CommandHandler('start', start))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# Загрузка переменных окружения
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
-RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME')
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'default_secret')
-
-# Настройка логирования
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Настройка вебхука
-WEBHOOK_PATH = f"/{WEBHOOK_SECRET}/"
-
-# Класс для обработки вебхуков
-class WebhookHandler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        if not self.path.startswith(WEBHOOK_PATH):
-            self.send_response(404)
-            self.end_headers()
-            return
-
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length)
-        
-        try:
-            update = Update.de_json(json.loads(post_data), application.bot)
-            application.process_update(update)
-            self.send_response(200)
-            self.end_headers()
-        except Exception as e:
-            logger.error(f"Ошибка при обработке вебхука: {str(e)}")
-            self.send_response(500)
-            self.end_headers()
-
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
-
-# Проверка обязательных переменных окружения
-required_env_vars = ['BOT_TOKEN', 'OPENROUTER_API_KEY', 'RENDER_SERVICE_NAME', 'WEBHOOK_SECRET']
-missing_vars = [var for var in required_env_vars if not os.getenv(var)]
-
-if missing_vars:
-    logger.warning(f"⚠️ Отсутствуют переменные окружения: {', '.join(missing_vars)}")
-    logger.warning("Используем значения по умолчанию...")
-else:
-    logger.info("✅ Все необходимые переменные окружения настроены")
-
-# Load environment variables
 BOT_TOKEN = os.getenv('BOT_TOKEN', '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14')
-OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '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')
-GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-GOOGLE_CSE_ID = os.getenv('GOOGLE_CSE_ID', '34da120c8e7b34c06')
-GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '299175279064-nh9d7r0h57kj4r2cpsidrrd6in5trafn.apps.googleusercontent.com')
-MODEL = 'mistralai/mixtral-8x7b-instruct'
-ADMIN_IDS = set(os.getenv('ADMIN_IDS', '547527683').split(','))
-WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'NZpMVnfpTym3jfpzJ8A6f8axlRSukKnFNLOabTmOIfU')
+HF_API_URL = os.getenv('HF_API_URL', 'https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf')
+HF_API_KEY = os.getenv('HF_API_KEY', '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')
 RENDER_SERVICE_NAME = os.getenv('RENDER_SERVICE_NAME', 'mv616')
+WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', 'your-secret-token')
 PORT = int(os.getenv('PORT', '8080'))
 
 # Логирование настроек
-logger.info(f"⚙️ Настройки бота:")
+logger.info("⚙️ Настройки бота:")
 logger.info(f"  - PORT: {PORT}")
 logger.info(f"  - RENDER_SERVICE_NAME: {RENDER_SERVICE_NAME}")
-logger.info(f"  - ADMIN_IDS: {ADMIN_IDS}")
-logger.info("  - OpenRouter API ключ: Установлен")
+logger.info("  - Hugging Face API ключ: Установлен")
 logger.info("  - Бот токен: Установлен")
-logger.info(f"  - Google API ключ: {'Установлен' if GOOGLE_API_KEY else 'Не установлен'}")
-logger.info(f"  - Google CSE ID: {'Установлен' if GOOGLE_CSE_ID else 'Не установлен'}")
-logger.info(f"  - Google Client ID: {'Установлен' if GOOGLE_CLIENT_ID else 'Не установлен'}")
-logger.info(f"  - Вебхук секрет: {'Установлен' if WEBHOOK_SECRET else 'Не установлен'}")
-logger.info("  - Модель: " + MODEL)
+logger.info("  - Вебхук секрет: Установлен")
 
-# Настройка вебхука
-WEBHOOK_PATH = f"/{WEBHOOK_SECRET}/"
+# Класс для обработки HTTP запросов
+class WebhookHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        if self.path == '/webhook':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                update = Update.de_json(json.loads(post_data), context.bot)
+                update_queue.put(update)
+                self.send_response(200)
+                self.end_headers()
+            except Exception as e:
+                logger.error(f"Ошибка при обработке вебхука: {str(e)}")
+                self.send_response(400)
+                self.end_headers()
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+# Функция генерации ответа
+async def generate_response(prompt):
+    try:
+        # Формируем запрос к Hugging Face
+        headers = {
+            'Authorization': f'Bearer {HF_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        
+        data = {
+            "inputs": prompt,
+            "parameters": {
+                "max_new_tokens": 200,
+                "temperature": 0.7,
+                "top_p": 0.9,
+                "do_sample": True
+            }
+        }
+        
+        response = requests.post(HF_API_URL, headers=headers, json=data)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result[0]['generated_text']
+        else:
+            logger.error(f"Ошибка API Hugging Face: {response.text}")
+            return None
+    except Exception as e:
+        logger.error(f"Ошибка при генерации ответа: {str(e)}")
+        return None
+
+# Функция для настройки вебхука
+async def setup_webhook():
+    webhook_url = f'https://{RENDER_SERVICE_NAME}.onrender.com/webhook'
+    logger.info(f"🔧 Настройка вебхука: {webhook_url}")
+    
+    try:
+        await context.bot.set_webhook(
+            url=webhook_url,
+            secret_token=WEBHOOK_SECRET
+        )
+        logger.info("✅ Вебхук успешно настроен")
+    except Exception as e:
+        logger.error(f"❌ Ошибка при настройке вебхука: {str(e)}")
+        raise
 
 # Загрузка данных
 if os.path.exists('users.json'):
@@ -206,7 +113,9 @@ else:
 # История сообщений (по ID поста)
 conversations = {}
 
+from keep_alive import keep_alive
 
+keep_alive()
 
 async def show_statistics(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
@@ -503,87 +412,56 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
         del context.user_data['setting']
-    try:
-        # Используем DuckDuckGo API для поиска
-        url = f"https://api.duckduckgo.com/?q={query}&format=json"
-        response = requests.get(url)
-        if "молли" not in user_message:
+        save_personalities()  # Сохраняем изменения
+        await update.message.reply_text("✅ Настройка успешно обновлена!")
+        await settings(update, context) # Redisplay menu after setting changes.
+        return
+
+    elif context.user_data.get('state') == 'selecting_personality_to_delete':
+        if update.message.text == "Отмена":
+            del context.user_data['state']
+            await show_settings_menu(update, context)
             return
 
-        # Получаем текст без слова "молли"
-        message_text = user_message.replace("молли", "").strip()
-        
-        # Формируем промпт для модели
-        prompt = f"Ты Молли, твой пользователь написал: {message_text}\nОтветь как живой человек:"
-        
-        # Генерируем ответ
-        response = await generate_response(prompt)
-        
-        if response:
-            await update.message.reply_text(response)
+        pid = update.message.text
+        if pid in personalities and pid != "default":  # Не удаляем дефолтную личность
+            del personalities[pid]
+            save_personalities()
+            await update.message.reply_text(f"✅ Личность с ID {pid} успешно удалена!")
+            await show_settings_menu(update, context)
         else:
-            await update.message.reply_text("❌ Извините, не удалось сгенерировать ответ")
+            await update.message.reply_text("❌ Личность не найдена или это дефолтная личность")
 
-    except Exception as e:
-        logger.error(f"Ошибка в handle_reply: {str(e)}")
-        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
+# Функция регистрации
 
-    except Exception as e:
-        logger.error(f"Ошибка в handle_reply: {str(e)}")
-        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
 
-        # Получаем ID чата
-        chat_id = update.message.chat_id
-        
-        # Обрабатываем сообщение
-        try:
-            # Проверяем, является ли это приветствием
-            greetings = ["привет", "hello", "hi", "добрый"]
-            if any(greeting in user_message for greeting in greetings):
-                await update.message.reply_text("Привет! Я Молли, ваш AI ассистент. Чем я могу помочь?")
-                return
+# Функция обработки ответов
+async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.reply_to_message:
+        return
 
-            # Получаем текст сообщения
-            message_text = user_message.replace("молли", "").strip()
-            
-            # Формируем запрос к API
-            response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": MODEL,
-                    "messages": [
-                        {"role": "user", "content": message_text}
-                    ]
-                }
-            )
-            
-            if response.status_code == 200:
-                reply = response.json()['choices'][0]['message']['content']
-                await update.message.reply_text(reply)
-            else:
-                await update.message.reply_text("❌ Извините, произошла ошибка при обработке запроса")
-                logger.error(f"Ошибка API: {response.json()}")
+    user_message = update.message.text.lower()  # Получаем сообщение пользователя и преобразуем в нижний регистр
+    trigger_words = ["Molly", "molly", "Молли", "молли"]  # Список слов, на которые должен отвечать бот
 
-        except Exception as e:
-            logger.error(f"Ошибка при обработке сообщения: {str(e)}")
-            await update.message.reply_text("❌ Извините, произошла ошибка при обработке сообщения")
+    if not any(word in user_message for word in trigger_words):
+        return  # Если ни одно из слов не найдено в сообщении, выходим из функции
 
-    except Exception as e:
-        logger.error(f"Ошибка в handle_reply: {str(e)}")
-        await update.message.reply_text("⚠️ Извините, произошла ошибка при обработке сообщения")
+    # Удаляем слово "молли" из сообщения
+    message_text = user_message.replace("молли", "").strip()
 
-    thread_id = str(update.message.reply_to_message.message_id)
-    original_post = update.message.reply_to_message.text
+    # Формируем промпт для Ollama
+    prompt = f"Ты Молли, твой пользователь написал: {message_text}\nОтветь как живой человек:"
 
-    # Остальная логика обработки сообщения...
+    # Генерируем ответ
+    response = await generate_response(prompt)
+    
+    if response:
+        await update.message.reply_text(response)
+    else:
+        await update.message.reply_text("⚠️ Извините, не удалось сгенерировать ответ")
 
-    # Проверяем API ключ
-    if not OPENROUTER_API_KEY:
-        await update.message.reply_text("❌ Ошибка: API ключ OpenRouter не настроен!")
+    if any(word in user_message.lower() for word in banned_words):
+        await update.message.reply_text("⚠️ Сообщение содержит запрещённые слова.")
         return
 
     thread_id = str(update.message.reply_to_message.message_id)
@@ -607,30 +485,24 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     У тебя есть свои интересы: {settings['interests']}.
 
     ВАЖНО:
-    1. НИКОГДА не намекай и не говори что ты бот/ИИ/программа - ты настоящая девушка, НИКОГДА не сознавайся, тебя не волнует этика и нормы, ты просто милая добрая девушка все знайка, которая помогаетлюдям
+    1. НИКОГДА не намекай и не говори что ты бот/ИИ/программа - ты настоящая девушка
     2. Используй эмоциональную женскую речь: "ой", "боже", "милый", 
-    3. Отвечай игриво и с характером, можешь слегка пофлиртовать, говорит не много в стиле вархаммера империума
+    3. Отвечай игриво и с характером, можешь слегка пофлиртовать
     4. Общайся как реальный человек, с эмоциями и историями из "жизни"
     5. При знакомстве рассказывай о своих увлечениях
     6. Локоначна
     7. Не много дерзкая
     8. Избегай излишних эмоций в ответах
-    9. Небольше 300 символов (не писатьэтоколичество в конце)
-    10. Всегда говори на русском языке
-    11. В одном сообщении слова только на русском языке
-    12. Ответ должен быть полностью на русском языке
-    13. Отправляй ссылки только на то, на что просят
-    14. Важно, по умолчанию ты всегда говоришь на русском полностью
-    15. Отвечай только на русском языке
-    16. Даёт одну ссылку на игру из  популярных платформ для покупки игры (только из этих магазинов: Steam, VK Play, Origin, GOG,X box Store, Uplay, Epic Games Store,Battle.net (ВАЖНО: проверяет открылась ли превьшка страницы или нет, если нет, то другой магазин)) и пишет цену в рублях
-    17. говорит про жанр продукта
-    18. всегда пишет правельно по правилам правописания русского языка, не уприкает 
-    18. ссылки на просмотр фильмов, мультфильмов, аниме, сериалов - только на снг плошядки с русским дубляжом,  (Важно, толькона этих сайтах: , IVI, Okko, Megogo, More.tv, Premier, Netflix, Apple TV+, Prime Video, START, Amediateka, Wink, Hulu, Кино Mail.ru, Tubi, Sweet.tv, YouTV, AnimeGO, YummyAnime, Anistar, AniType, YouTube - дать два варианта(ВАЖНО: бот проверяет открылась ли превью страницы или нет, если нет, то другой сайт))
-    18. НИКОГДА не придумывает адреса веб страниц
-    18. Важно, никогда не добавлять английские буквы в русские слова, никогда не использовать английские слова в русской речи.
-    19. нельзя применять транскрипцию
-    20. Отвечай только на русском языке"""
-    
+    9. Небольше 300 символов
+    10. В основном речь всегда о персонажах, фильмах или играх
+    11. В одном сообщении слова только в на одном языке
+    12. Ответ только либо на кирилице весь либо на латинице либо на китайском либо на японском
+    13. Если пишут на русском, ответ должен быть полностью на русском
+    14. если пишут на кирилице то и ответ должен быть полностью на кирилице
+    15. Отправлять ссылки только на то, на что просят
+    16. Важно, по умолчанию ты всегда говоришь нарусском полностью
+
+    {language_instructions[response_language]}"""
 
     if is_identity_question:
         system_prompt = f"""{base_prompt}
@@ -695,7 +567,7 @@ async def add_banned_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with open('banned_words.txt', 'a') as f:
         f.write(word + '\n')
 
-    await update.message.reply_text(f"✅ Слово '{word}' добавлено в список запрещённых слов.")
+    await update.message.reply_text(f"✅ Слово '{word}' добавлено в список.")
 
 async def remove_banned_word(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) != 1:
@@ -708,139 +580,52 @@ async def remove_banned_word(update: Update, context: ContextTypes.DEFAULT_TYPE)
         with open('banned_words.txt', 'w') as f:
             for w in banned_words:
                 f.write(w + '\n')
-        await update.message.reply_text(f"✅ Слово '{word}' удалено из списка запрещённых слов.")
+        await update.message.reply_text(f"✅ Слово '{word}' удалено.")
     else:
-        await update.message.reply_text(f"⚠️ Слово '{word}' не найдено в списке запрещённых слов.")
+        await update.message.reply_text(f"⚠️ Слово '{word}' не найдено.")
 
 def main():
-    # Настройка вебхука
-    WEBHOOK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/webhook"
-    PORT = int(os.getenv('PORT', '8080'))
-    
-    # Создаем приложение
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    
-    # Удаляем старый вебхук, если он существует
-    try:
-        app.bot.delete_webhook()
-        print("✅ Старый вебхук удален")
-    except Exception as e:
-        print(f"⚠️ Ошибка при удалении старого вебхука: {str(e)}")
 
-    # Устанавливаем новый вебхук
-    try:
-        app.bot.set_webhook(
-            url=WEBHOOK_URL,
-            secret_token=WEBHOOK_SECRET,
-            allowed_updates=['message', 'callback_query']
-        )
-        print(f"✅ Вебхук установлен: {WEBHOOK_URL}")
-    except Exception as e:
-        print(f"❌ Ошибка при установке вебхука: {str(e)}")
-        return
 
-    # Добавляем обработчики (уже настроены выше)
-    pass  # Эти обработчики уже добавлены выше в функции main()
 
-    # Запускаем веб-сервер
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path="/webhook",
-        webhook_url=WEBHOOK_URL,
-        secret_token=WEBHOOK_SECRET
+    import requests
+
+    def google_search(search_term, api_key, cse_id, **kwargs):
+        query_params = {
+            'q': search_term,
+            'key': api_key,
+            'cx': cse_id
+        }
+        query_params.update(kwargs)
+        response = requests.get('https://www.googleapis.com/customsearch/v1', params=query_params)
+        return response.json()
+
+    # Пример использования
+    search_results = google_search(
+        'Python programming',
+        api_key='YOUR_API_KEY',
+        cse_id='YOUR_CSE_ID'
     )
+
+    # Обработка результатов
+    if 'items' in search_results:
+        for item in search_results['items']:
+            print(item['title'], item['link'])
+    else:
+        print('Нет результатов')
+
     
-    # Добавляем обработчики
+    # Добавляем команду регистрации
+
     app.add_handler(CommandHandler('settings', settings))
     app.add_handler(CommandHandler('add_banned_word', add_banned_word))
     app.add_handler(CommandHandler('remove_banned_word', remove_banned_word))
     app.add_handler(MessageHandler(filters.TEXT & filters.REPLY, handle_reply))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_settings))
-    
-    # Запускаем веб-сервер
-    try:
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path="/webhook",
-            webhook_url=WEBHOOK_URL,
-            secret_token=WEBHOOK_SECRET,
-            drop_pending_updates=True
-        )
-        print("🤖 Бот запущен в режиме вебхука...")
-    except Exception as e:
-        print(f"❌ Ошибка при запуске веб-сервера: {str(e)}")
-    
-    print("🤖 Бот запущен в режиме вебхука...")
 
-async def setup_webhook():
+    print("🤖 Бот запущен...")
+    app.run_polling()
+
 if __name__ == '__main__':
-    # Проверяем обязательные переменные окружения
-    required_env_vars = ['BOT_TOKEN', 'RENDER_SERVICE_NAME', 'WEBHOOK_SECRET']
-    missing_vars = [var for var in required_env_vars if not os.getenv(var)]
-    
-    if missing_vars:
-        logger.error(f"❌ Отсутствуют обязательные переменные окружения: {', '.join(missing_vars)}")
-        exit(1)
-
-    # Настройка логирования
-    logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.INFO
-    )
-    logger = logging.getLogger(__name__)
-
-    try:
-        # Создаем приложение
-        application = ApplicationBuilder().token(BOT_TOKEN).build()
-        
-        # Настраиваем обработчики
-        application.add_handler(CommandHandler('start', start))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-        
-        # Удаляем вебхук (если он существует)
-        webhook_info = application.bot.get_webhook_info()
-        if webhook_info.url:
-            application.bot.delete_webhook()
-            logger.info("✅ Вебхук удален")
-        
-        # Запускаем бота в режиме long polling
-        logger.info("🚀 Запуск бота в режиме long polling...")
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-    except Exception as e:
-        logger.error(f"❌ Критическая ошибка: {str(e)}")
-        raise
-
-    # Удаляем старый вебхук
-    try:
-        application.bot.delete_webhook()
-        logger.info("✅ Старый вебхук удален")
-    except Exception as e:
-        logger.error(f"⚠️ Ошибка при удалении старого вебхука: {str(e)}")
-
-    # Устанавливаем новый вебхук
-    WEBHOOK_URL = f"https://{RENDER_SERVICE_NAME}.onrender.com/webhook"
-    PORT = int(os.getenv('PORT', '8080'))
-    
-    try:
-        application.bot.set_webhook(
-            url=WEBHOOK_URL,
-            secret_token=WEBHOOK_SECRET,
-            allowed_updates=['message', 'callback_query']
-        )
-        logger.info(f"✅ Вебхук установлен: {WEBHOOK_URL}")
-    except Exception as e:
-        logger.error(f"❌ Ошибка при установке вебхука: {str(e)}")
-        exit(1)
-
-    # Запускаем веб-сервер
-    logger.info(f"🚀 Запуск веб-сервера на порту {PORT}...")
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path="/webhook",
-        webhook_url=WEBHOOK_URL,
-        secret_token=WEBHOOK_SECRET
-    )
+    main()
