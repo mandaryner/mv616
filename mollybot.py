@@ -13,9 +13,6 @@ logger = logging.getLogger(__name__)
 # Токен бота
 BOT_TOKEN = '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14'
 
-# API ключ Hugging Face
-HF_API_KEY = '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'
-
 # Личность бота
 PERSONALITY = {
     'name': 'Молли',
@@ -112,58 +109,6 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Я общаюсь в стиле: {PERSONALITY['communication_style']}"
     )
 
-# Функция генерации ответа через Qwen
-async def generate_response(prompt):
-    try:
-        # Формируем запрос к Qwen
-        headers = {
-            'Content-Type': 'application/json'
-        }
-        
-        # Промпт для Qwen
-        prompt_text = f"""
-Ты {PERSONALITY['name']}, {PERSONALITY['age']} лет, {PERSONALITY['occupation']}.
-Твои хобби: {', '.join(PERSONALITY['hobbies'])}
-Твои черты характера: {', '.join(PERSONALITY['personality_traits'])}
-Ты общаешься в стиле: {PERSONALITY['communication_style']}
-
-Пользователь написал: {prompt}
-Ответь как живой человек, используя свой стиль общения.
-"""
-        
-        data = {
-            "prompt": prompt_text,
-            "max_tokens": 200,
-            "temperature": 0.7,
-            "top_p": 0.9
-        }
-        
-        # Отправляем запрос к Qwen
-        try:
-            response = requests.post(
-                'https://qwen.aliyun.com/api/v1/chat/completions',
-                headers=headers,
-                json=data,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                return result['choices'][0]['message']['content']
-            else:
-                logger.error(f"Ошибка API Qwen: {response.text}")
-                logger.error(f"Код ошибки: {response.status_code}")
-                return None
-        except requests.exceptions.Timeout:
-            logger.error("Время ожидания ответа истекло")
-            return None
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Ошибка при отправке запроса: {str(e)}")
-            return None
-    except Exception as e:
-        logger.error(f"Ошибка при генерации ответа: {str(e)}")
-        return None
-
 # Обработчик текстовых сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text.lower()
@@ -172,64 +117,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет! Я обрабатываю ваш запрос. Пожалуйста, подождите немного.")
     
     try:
-        # Формируем промпт для нейросети
-        prompt = f"""
-        Ты {PERSONALITY['name']}, {PERSONALITY['age']} лет, {PERSONALITY['occupation']}.
-        Твои хобби: {', '.join(PERSONALITY['hobbies'])}
-        Твои черты характера: {', '.join(PERSONALITY['personality_traits'])}
-        Ты общаешься в стиле: {PERSONALITY['communication_style']}
-
-        Пользователь написал: {update.message.text}
+        # Простой ответ на сообщение
+        response = f"Я поняла: {user_message}\n" \
+                   "Я всегда готова помочь и поддержать тебя!"
         
-        Ответь как живой человек, используя свой стиль общения.
-        """
-        
-        # Генерируем ответ через Hugging Face
-        response = await generate_response(prompt)
-        if response:
-            # Удаляем промпт из ответа
-            response = response.replace(prompt, '').strip()
-            # Ограничиваем длину ответа до 1000 символов
-            if len(response) > 1000:
-                response = response[:1000] + "..."
-            await update.message.reply_text(response)
-        else:
-            # Более информативное сообщение об ошибке
-            await update.message.reply_text("Извините, не удалось получить ответ от нейросети. Попробуйте позже или отправьте другое сообщение.")
-    except Exception as e:
-        logger.error(f"Ошибка при обработке сообщения: {str(e)}")
-        await update.message.reply_text("Извините, произошла ошибка при обработке вашего сообщения. Попробуйте позже.")
+        await update.message.reply_text(response)
     except Exception as e:
         logger.error(f"Ошибка при обработке сообщения: {str(e)}")
         await update.message.reply_text("Извините, произошла ошибка при обработке вашего сообщения. Попробуйте позже.")
 
-# Функция для остановки предыдущего экземпляра бота
-async def stop_previous_instance():
+# Основная функция
+def main():
     try:
-        # Создаем временное приложение
-        temp_app = ApplicationBuilder().token(BOT_TOKEN).build()
-        
-        # Получаем список активных вебхуков
-        webhook_info = await temp_app.bot.get_webhook_info()
-        
-        # Если есть активный вебхук, удаляем его
-        if webhook_info.url:
-            await temp_app.bot.delete_webhook()
-            logger.info("Удален предыдущий вебхук")
-        
-        # Очищаем очередь обновлений
-        await temp_app.bot.get_updates(timeout=1)
-        logger.info("Очищена очередь обновлений")
-        
-    except Exception as e:
-        logger.error(f"Ошибка при остановке предыдущего экземпляра: {str(e)}")
-
-# Асинхронная функция для запуска бота
-async def run_bot():
-    try:
-        # Останавливаем предыдущий экземпляр
-        await stop_previous_instance()
-        
         application = ApplicationBuilder().token(BOT_TOKEN).build()
         
         application.add_handler(CommandHandler("start", start))
@@ -246,5 +145,4 @@ async def run_bot():
         raise
 
 if __name__ == '__main__':
-    import asyncio
-    asyncio.run(run_bot())
+    main()
