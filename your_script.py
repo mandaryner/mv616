@@ -478,7 +478,9 @@ async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Получаем текст сообщения
     try:
         user_message = update.message.reply_to_message.text
+        logger.info(f"Получено сообщение: {user_message}")
         if not user_message:
+            logger.warning("Получено пустое сообщение")
             await update.message.reply_text("⚠️ Пустое сообщение")
             return
     except Exception as e:
@@ -486,15 +488,32 @@ async def handle_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Ошибка при обработке сообщения")
         return
 
+    # Проверяем тип сообщения
+    if update.message.reply_to_message:
+        logger.info(f"Тип сообщения: {update.message.reply_to_message.content_type}")
+        if update.message.reply_to_message.content_type != 'text':
+            await update.message.reply_text("⚠️ Бот отвечает только на текстовые сообщения")
+            return
+
+    # Проверяем триггерные слова сразу после получения текста
     trigger_words = ["Молли", "молли"]  # Список слов, на которые должен отвечать бот
+    if not any(word in user_message.lower() for word in trigger_words):
+        return
+
+    # Проверяем API ключ
+    if not OPENROUTER_API_KEY:
+        await update.message.reply_text("❌ Ошибка: API ключ OpenRouter не настроен!")
+        return
 
     # Проверяем, что сообщение не пустое
     if not user_message.strip():
         await update.message.reply_text("⚠️ Пустое сообщение")
         return
 
-    if not any(word in user_message.lower() for word in trigger_words):
-        return
+    thread_id = str(update.message.reply_to_message.message_id)
+    original_post = update.message.reply_to_message.text
+
+    # Остальная логика обработки сообщения...
 
     # Проверяем API ключ
     if not OPENROUTER_API_KEY:
