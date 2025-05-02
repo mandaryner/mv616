@@ -10,9 +10,13 @@ import re
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.DEBUG  # Устанавливаем более детальный уровень логирования
+    level=logging.DEBUG
 )
 logger = logging.getLogger(__name__)
+
+# Загрузка переменных окружения
+BOT_TOKEN = os.getenv('BOT_TOKEN', '7628456508:AAF1Th7JejBs2u3YYsD4vfxtqra5PmM8c14')
+HF_API_KEY = os.getenv('HF_API_KEY', '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')
 
 # Проверяем переменные окружения
 if not BOT_TOKEN:
@@ -25,10 +29,6 @@ if not HF_API_KEY:
 
 logger.info(f"Запуск бота с токеном: {BOT_TOKEN[:10]}...{BOT_TOKEN[-5:]}")
 logger.info(f"HF API ключ: {HF_API_KEY[:10]}...{HF_API_KEY[-5:]}")
-
-# Загрузка переменных окружения
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-HF_API_KEY = os.getenv('HF_API_KEY')
 
 # Личность бота
 PERSONALITY = {
@@ -180,31 +180,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'молли' not in user_message:
         return
 
-    # Получаем информацию из интернета
-    search_query = update.message.text  # Используем полный текст сообщения для поиска
-    search_result = await search_info(search_query)
-    
-    # Формируем промпт с учетом найденной информации
-    prompt = f"""
-    Ты Молли, {PERSONALITY['age']} лет, {PERSONALITY['occupation']}.
-    Твои хобби: {', '.join(PERSONALITY['hobbies'])}
-    Твои черты характера: {', '.join(PERSONALITY['personality_traits'])}
-    Ты общаешься в стиле: {PERSONALITY['communication_style']}
+    # Отправляем сообщение о том, что обрабатываем запрос
+    await update.message.reply_text("Привет! Я обрабатываю ваш запрос. Пожалуйста, подождите немного.")
 
-    Пользователь написал: {update.message.text}
-    
-    Найденная информация: {search_result}
-    
-    Используй найденную информацию для ответа, если она есть.
-    Если информация не найдена или неактуальна, ответь на основе своих знаний.
-    Ответь как живой человек, используя свой стиль общения.
-    """
-    
-    response = await generate_response(prompt)
-    if response:
-        await update.message.reply_text(response)
-    else:
-        await update.message.reply_text("Извините, не удалось сгенерировать ответ")
+    try:
+        # Получаем информацию из интернета
+        search_query = update.message.text  # Используем полный текст сообщения для поиска
+        search_result = await search_info(search_query)
+        
+        # Формируем промпт с учетом найденной информации
+        prompt = f"""
+        Ты Молли, {PERSONALITY['age']} лет, {PERSONALITY['occupation']}.
+        Твои хобби: {', '.join(PERSONALITY['hobbies'])}
+        Твои черты характера: {', '.join(PERSONALITY['personality_traits'])}
+        Ты общаешься в стиле: {PERSONALITY['communication_style']}
+
+        Пользователь написал: {update.message.text}
+        
+        Найденная информация: {search_result}
+        
+        Используй найденную информацию для ответа, если она есть.
+        Если информация не найдена или неактуальна, ответь на основе своих знаний.
+        Ответь как живой человек, используя свой стиль общения.
+        """
+        
+        response = await generate_response(prompt)
+        if response:
+            await update.message.reply_text(response)
+        else:
+            await update.message.reply_text("Извините, не удалось сгенерировать ответ. Попробуйте позже.")
+    except Exception as e:
+        logger.error(f"Ошибка при обработке сообщения: {str(e)}")
+        await update.message.reply_text("Извините, произошла ошибка при обработке вашего сообщения. Попробуйте позже.")
 
 # Функция настройки вебхука
 async def setup_webhook():
